@@ -1,0 +1,15 @@
+/*
+Index colors for the RGB wedo2.0 LED
+*/
+
+#define LEGO_COLOR_BLACK 0
+#define LEGO_COLOR_PINK 1
+#define LEGO_COLOR_PURPLE 2
+#define LEGO_COLOR_BLUE 3
+#define LEGO_COLOR_CYAN 4
+#define LEGO_COLOR_LIGHTGREEN 5
+#define LEGO_COLOR_GREEN 6
+#define LEGO_COLOR_YELLOW 7
+#define LEGO_COLOR_ORANGE 8
+#define LEGO_COLOR_RED 9
+#define LEGO_COLOR_WHITE 10
