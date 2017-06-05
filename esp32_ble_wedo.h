@@ -20,18 +20,19 @@
 class Wedo
 {
   public:
-    Wedo(const char*);
+    Wedo(const char*,void (*f)(int));
     int connect();
     boolean connected();
     boolean ready();
-    int writeOutputCommand(uint8_t* command);
-    int writeInputCommand(uint8_t* command);
+    int writeOutputCommand(uint8_t* command,int size);
+    int writeInputCommand(uint8_t* command,int size);
     void writeMotor(uint8_t wedo_port,int wedo_speed);
     void writeIndexColor(uint8_t color);
     void writeSound(unsigned int frequency, unsigned int length);
     void setRGBMode();
     void setDetectSensor(uint8_t port);
     void writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, uint8_t format);
+    void addNotificationHandler(void (*f)(int));
 };
 
 #endif

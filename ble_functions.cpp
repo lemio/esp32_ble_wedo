@@ -158,8 +158,8 @@ static void profile_KEYBLE_eventhandler(esp_gattc_cb_event_t event, esp_gatt_if_
     }
     case ESP_GATTC_NOTIFY_EVT:
     {
-        printf("NOTIFY: len %d, value %08x \n", p_data->notify.value_len,*(uint32_t *)p_data->notify.value);
-
+        //printf("NOTIFY: len %d, value %08x \n", p_data->notify.value_len,*(uint32_t *)p_data->notify.value);
+        globalHandler(p_data->notify.value[2]);
 
         //WHEN THE BUTTON IS PRESSED
 
@@ -304,34 +304,49 @@ void gattc_client_test(void)
     esp_bluedroid_enable();
     ble_client_appRegister();
 }
-void writeBLECommand(boolean type, uint8_t* command)
+void writeBLECommand(int type, uint8_t* command,int size)
 {
 /*  while(!recieved){
     delay(10);
   }*/
   recieved = false;
+  /*printf("send 0x");
+  for (int i =0; i< size;i++){
+  printf("%02x",command[i]);
+  }
+  printf("\n");*/
   if (type == WEDO_INPUT){
+    //uint8_t commandIn[] = {0x01, 0x02, 02, 0x23, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01};
     esp_err_t err = esp_ble_gattc_write_char(
                   gl_profile_tab[PROFILE_KEYBLE_APP_ID].gattc_if,
                   gl_profile_tab[PROFILE_KEYBLE_APP_ID].conn_id,
                   &KEYBLE_application_service,
                   &lego_input_characteristic,
-                  sizeof(command),
+                  size,
                   command,
                   ESP_GATT_WRITE_TYPE_RSP,
                   ESP_GATT_AUTH_REQ_NONE);
 
+  if (err != 0){
+    printf("Error sending the input message");
+  }else{
+    //printf("Succesfully sent input message");
+  }
   }else{
   esp_err_t err = esp_ble_gattc_write_char(
                 gl_profile_tab[PROFILE_KEYBLE_APP_ID].gattc_if,
                 gl_profile_tab[PROFILE_KEYBLE_APP_ID].conn_id,
                 &KEYBLE_application_service,
                 &lego_output_characteristic,
-                sizeof(command),
+                size,
                 command,
                 ESP_GATT_WRITE_TYPE_RSP,
                 ESP_GATT_AUTH_REQ_NONE);
+                if (err != 0){
+                  printf("Error sending the input message");
+                }
               }
+
 }
 void setName(const char* name){
   wedo_name = name;
@@ -342,4 +357,7 @@ int getBLEReady(){
 }
 int getBLEConnected(){
   return connected;
+}
+void addBLEhandler(void (*f)(int)){
+  globalHandler = f;
 }
