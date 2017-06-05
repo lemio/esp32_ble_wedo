@@ -103,25 +103,24 @@ static void profile_KEYBLE_eventhandler(esp_gattc_cb_event_t event, esp_gatt_if_
           printf("register notify\n");
             esp_ble_gattc_register_for_notify(gattc_if, gl_profile_tab[PROFILE_KEYBLE_APP_ID].remote_bda, &KEYBLE_application_service, &p_data->get_char.char_id);
         }
-        uint8_t motor_uuid[ESP_UUID_LEN_128] = MOTOR_UUID;
-        if (bt_compare_UUID128(p_data->get_char.char_id.uuid.uuid.uuid128, motor_uuid)) {
-          printf("found MOTOR OUTPUT CMD appserv send profile!\n");
-          connected = true;
-          lego_output_characteristic = p_data->get_char.char_id;
-          uint32_t notify_en = 0x01010164;
+        uint8_t input_uuid[ESP_UUID_LEN_128] = INPUT_UUID;
+        uint8_t output_uuid[ESP_UUID_LEN_128] = OUTPUT_UUID;
 
-          /*Serial.print(esp_ble_gattc_write_char(
-                gl_profile_tab[PROFILE_KEYBLE_APP_ID].gattc_if,
-                gl_profile_tab[PROFILE_KEYBLE_APP_ID].conn_id,
-                &KEYBLE_application_service,
-                &lego_output_characteristic,
-                sizeof(notify_en),
-                (uint8_t *)&notify_en,
-                ESP_GATT_WRITE_TYPE_NO_RSP,
-                ESP_GATT_AUTH_REQ_NONE));*/
-        }else{
+        if (bt_compare_UUID128(p_data->get_char.char_id.uuid.uuid.uuid128, input_uuid)) {
+          printf("found INPUT UUID!\n");
+          succes++;
+          lego_input_characteristic = p_data->get_char.char_id;
+        }
+
+        if (bt_compare_UUID128(p_data->get_char.char_id.uuid.uuid.uuid128, output_uuid)) {
+          printf("found OUTPUT UUID!\n");
+          succes++;
+          lego_output_characteristic = p_data->get_char.char_id;
+        }
+        if (succes<2){
           esp_ble_gattc_get_characteristic(gattc_if, conn_id, &KEYBLE_application_service, &p_data->get_char.char_id);
         }
+
         break;
     }
 
@@ -133,8 +132,8 @@ static void profile_KEYBLE_eventhandler(esp_gattc_cb_event_t event, esp_gatt_if_
     case ESP_GATTC_REG_FOR_NOTIFY_EVT: {
         uint16_t notify_en = 0x01;
         printf("REG FOR NOTIFY: status %d", p_data->reg_for_notify.status);
-        ESP_LOGI(GATTC_TAG, "REG FOR_NOTIFY: srvc_id = %04x, char_id = %04x", p_data->reg_for_notify.srvc_id.id.uuid.uuid.uuid128, p_data->reg_for_notify.char_id.uuid.uuid.uuid128);
-
+        printf("REG FOR_NOTIFY: srvc_id = %04x, char_id = %04x", p_data->reg_for_notify.srvc_id.id.uuid.uuid.uuid128, p_data->reg_for_notify.char_id.uuid.uuid.uuid128);
+        connected = true;
         esp_ble_gattc_write_char_descr(
                 gattc_if,
                 conn_id,
@@ -305,12 +304,24 @@ void gattc_client_test(void)
     esp_bluedroid_enable();
     ble_client_appRegister();
 }
-void writeBLECommand(uint8_t* command)
+void writeBLECommand(boolean type, uint8_t* command)
 {
 /*  while(!recieved){
     delay(10);
   }*/
   recieved = false;
+  if (type == WEDO_INPUT){
+    esp_err_t err = esp_ble_gattc_write_char(
+                  gl_profile_tab[PROFILE_KEYBLE_APP_ID].gattc_if,
+                  gl_profile_tab[PROFILE_KEYBLE_APP_ID].conn_id,
+                  &KEYBLE_application_service,
+                  &lego_input_characteristic,
+                  sizeof(command),
+                  command,
+                  ESP_GATT_WRITE_TYPE_RSP,
+                  ESP_GATT_AUTH_REQ_NONE);
+
+  }else{
   esp_err_t err = esp_ble_gattc_write_char(
                 gl_profile_tab[PROFILE_KEYBLE_APP_ID].gattc_if,
                 gl_profile_tab[PROFILE_KEYBLE_APP_ID].conn_id,
@@ -320,6 +331,7 @@ void writeBLECommand(uint8_t* command)
                 command,
                 ESP_GATT_WRITE_TYPE_RSP,
                 ESP_GATT_AUTH_REQ_NONE);
+              }
 }
 void setName(const char* name){
   wedo_name = name;

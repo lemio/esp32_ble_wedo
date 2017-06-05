@@ -22,9 +22,21 @@ int Wedo::writeOutputCommand(uint8_t* command)
   for(int i=0;i<20&&!ready();i++){
     delay(5);
   }
-  writeBLECommand(command);
+  writeBLECommand(WEDO_OUTPUT,command);
 }
-
+int Wedo::writeInputCommand(uint8_t* command)
+{
+  /*
+  Write an output command to the output characteristic of the WEDO
+  */
+  //recieved = false;
+  //Make a safety buffer so there won't be any loss of messages due to sending two messages at the same time
+  //It waits till the last message was sent with a maximum of 100ms
+  for(int i=0;i<20&&!ready();i++){
+    delay(5);
+  }
+  writeBLECommand(WEDO_INPUT,command);
+}
 void Wedo::writeMotor(uint8_t wedo_port,int wedo_speed)
 {
   //From http://www.ev3dev.org/docs/tutorials/controlling-wedo2-motor/
@@ -57,6 +69,16 @@ boolean Wedo::connected(){
 }
 boolean Wedo::ready(){
   return getBLEReady();
+}
+void Wedo::setRGBMode(){
+  writePortDefinition(0x06, 0x17, 0x01, 0x02);
+}
+void Wedo::setDetectSensor(uint8_t port){
+  writePortDefinition(port, ID_DETECT_SENSOR,0,0);
+}
+void Wedo::writePortDefinition (uint8_t port, uint8_t type, uint8_t mode, uint8_t format){
+  uint8_t command[] = {0x01, 0x02, port, type, mode, 0x01, 0x00, 0x00, 0x00, format, 0x01};
+  writeInputCommand(command);
 }
 /*
 int Wedo::isReady(){
