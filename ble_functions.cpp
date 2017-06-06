@@ -158,8 +158,13 @@ static void profile_KEYBLE_eventhandler(esp_gattc_cb_event_t event, esp_gatt_if_
     }
     case ESP_GATTC_NOTIFY_EVT:
     {
-        //printf("NOTIFY: len %d, value %08x \n", p_data->notify.value_len,*(uint32_t *)p_data->notify.value);
-        globalHandler(p_data->notify.value[2]);
+      printf("recieved notifier 0x");
+      for (int i =0; i< sizeof(p_data->notify.value);i++){
+      printf("%02x",p_data->notify.value[i]);
+      }
+      printf("\n");
+        printf("NOTIFY: len %d, value %08x \n", p_data->notify.value_len,*(uint32_t *)p_data->notify.value);
+        globalHandler(p_data->notify.value,p_data->notify.value_len);
 
         //WHEN THE BUTTON IS PRESSED
 
@@ -358,6 +363,6 @@ int getBLEReady(){
 int getBLEConnected(){
   return connected;
 }
-void addBLEhandler(void (*f)(int)){
+void addBLEhandler(void (*f)(uint8_t*,int)){
   globalHandler = f;
 }

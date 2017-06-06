@@ -121,11 +121,11 @@ static struct gattc_profile_inst gl_profile_tab[PROFILE_NUM] = {
         //.gattc_if = ESP_GATT_IF_NONE,       /* Not get the gatt_if, so initial is ESP_GATT_IF_NONE*/
     //},
 };
-static void (*globalHandler)(int);
+static void (*globalHandler)(uint8_t*,int);
 void gattc_client_test(void);
 static int connected = false;
 void writeBLECommand(int type,uint8_t* command,int size);
-void addBLEhandler(void (*f)(int));
+void addBLEhandler(void (*f)(uint8_t*,int));
 void setName(const char* name);
 static int recieved;
 int getBLEReady();

@@ -14,13 +14,25 @@
 #include "ble_functions.h"
 
 #define ID_MOTOR 1
-#define ID_TILT_SENSOR 34 //0x23
-#define ID_DETECT_SENSOR 35 //0x24
+#define ID_TILT_SENSOR 34
+//0x23
+#define ID_DETECT_SENSOR 35
+//0x24
+#define RANGE_10 0
+#define RANGE_100 1
+#define RANGE_RAW 2
+static void _WEDOnotificationHandler(uint8_t* data,int size);
+#define WEDO_PORTS 2
+static uint8_t devices[WEDO_PORTS] = {0,0};
+typedef void (*inputHandlerFunction)(int8_t*,int);
+static void (*portHandlers[WEDO_PORTS])(int8_t*,int);
+
+//static void (*port2Handler)(uint8_t*,int);
 
 class Wedo
 {
   public:
-    Wedo(const char*,void (*f)(int));
+    Wedo(const char*);//,void (*f)(int));
     int connect();
     boolean connected();
     boolean ready();
@@ -29,8 +41,11 @@ class Wedo
     void writeMotor(uint8_t wedo_port,int wedo_speed);
     void writeIndexColor(uint8_t color);
     void writeSound(unsigned int frequency, unsigned int length);
+    void writeRGB(uint8_t red, uint8_t green, uint8_t blue);
     void setRGBMode();
-    void setDetectSensor(uint8_t port);
+    void setIndexMode();
+    void setTiltSensor(uint8_t port,inputHandlerFunction);
+    void setDetectSensor(uint8_t port,inputHandlerFunction);
     void writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, uint8_t format);
     void addNotificationHandler(void (*f)(int));
 };
