@@ -55,6 +55,6 @@ void setup() {
 void loop() {
   if (detectSensorValue != 0){
     myWedo.writeSound(detectSensorValue*10,200);
-    myWedo.writeRGB(detectSensorValue*25,0,detectSensorValue*25);
+    myWedo.writeRGB(detectSensorValue*2.5,0,255-detectSensorValue*2.5);
   }
 }
