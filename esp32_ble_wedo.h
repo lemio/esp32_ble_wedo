@@ -44,10 +44,10 @@ class Wedo
     void writeRGB(uint8_t red, uint8_t green, uint8_t blue);
     void setRGBMode();
     void setIndexMode();
-    void setTiltSensor(uint8_t port,inputHandlerFunction);
-    void setDetectSensor(uint8_t port,inputHandlerFunction);
+    void setTiltSensor(uint8_t port,inputHandlerFunction portHandler);
+    void setDetectSensor(uint8_t port,inputHandlerFunction portHandler);
     void writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, uint8_t format);
-    void addNotificationHandler(void (*f)(int));
+    void addNotificationHandler(void (*f)(uint8_t*,int));
 };
 
 #endif

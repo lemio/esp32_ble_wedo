@@ -125,8 +125,9 @@ void Wedo::writePortDefinition (uint8_t port, uint8_t type, uint8_t mode, uint8_
   printf("writePortDefinition with len: %i \n",sizeof(command));
   writeInputCommand(command,sizeof(command));
 }
-void Wedo::addNotificationHandler(void (*f)(int)){
-  //addBLEhandler(f);
+void Wedo::addNotificationHandler(void (*f)(uint8_t*,int)){
+  //Overrule the standard notification handler
+  addBLEhandler(f);
 }
 /*
 int Wedo::isReady(){
