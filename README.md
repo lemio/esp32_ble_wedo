@@ -56,10 +56,10 @@ Sends a direct output command to the WEDO2.0
 
 ## Prior art
 
-[Official WEDO2.0 SDK from LEGO ](https://education.lego.com/en-us/support/wedo-2/developer-kits)
-[Nodejs implementation for Wedo2.0](https://github.com/vheun/wedo2)
-[Controlling a motor in linux with USB dongle](http://www.ev3dev.org/docs/tutorials/controlling-wedo2-motor/)
-[Sniffing data from WEDO2.0](http://ofalcao.pt/blog/2016/wedo-2-0-reverse-engineering)
-[Controlling a motor ](http://ofalcao.pt/blog/2016/controlling-wedo-2-0-motor-from-linux)
-[Controlling RGB LED in python](http://ofalcao.pt/blog/2016/wedo-2-0-colors-with-python)
-[Making apps for WEDO2.0 in app-inventor](http://ofalcao.pt/blog/2016/lego-wedo-2-0-with-mit-app-inventor)
+* [Official WEDO2.0 SDK from LEGO ](https://education.lego.com/en-us/support/wedo-2/developer-kits)
+* [Nodejs implementation for Wedo2.0](https://github.com/vheun/wedo2)
+* [Controlling a motor in linux with USB dongle](http://www.ev3dev.org/docs/tutorials/controlling-wedo2-motor/)
+* [Sniffing data from WEDO2.0](http://ofalcao.pt/blog/2016/wedo-2-0-reverse-engineering)
+* [Controlling a motor ](http://ofalcao.pt/blog/2016/controlling-wedo-2-0-motor-from-linux)
+* [Controlling RGB LED in python](http://ofalcao.pt/blog/2016/wedo-2-0-colors-with-python)
+* [Making apps for WEDO2.0 in app-inventor](http://ofalcao.pt/blog/2016/lego-wedo-2-0-with-mit-app-inventor)
