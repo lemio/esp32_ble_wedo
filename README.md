@@ -49,12 +49,12 @@ Let's the piezo in the WEDO make some noise, I'm not sure if the freqency and le
 
 Sends a direct output command to the WEDO2.0
 
-##Examples
+## Examples
 
 * wifi_control.ino (it let's you set the direction of the motor connected to the wedo).
 * button_motor.ino (it let's you controll the motor with the build in button on the ESP). (Nice start if you want to make a remote for you WEDO creation)
 
-##Prior art
+## Prior art
 
 [Official WEDO2.0 SDK from LEGO ](https://education.lego.com/en-us/support/wedo-2/developer-kits)
 [Nodejs implementation for Wedo2.0](https://github.com/vheun/wedo2)
