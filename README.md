@@ -1,6 +1,31 @@
 # esp32_ble_wedo
 A library to control LEGO wedo with the ESP32 through Bluetooth low energy
 
+## Version 2.0.0 - Now using NimBLE-Arduino! 🎉
+
+This library has been completely refactored to use the modern **NimBLE-Arduino** library for improved performance, stability, and reduced memory usage. The public API remains 100% compatible with previous versions.
+
+### Requirements
+
+- **ESP32** board
+- **NimBLE-Arduino** library (automatically installed via Arduino Library Manager or add to platformio.ini)
+
+### Installation
+
+#### Arduino IDE
+1. Install NimBLE-Arduino from Library Manager (search for "NimBLE-Arduino" by h2zero)
+2. Install this library from Library Manager or download from GitHub
+
+#### PlatformIO
+Add to your `platformio.ini`:
+```ini
+lib_deps = 
+    h2zero/NimBLE-Arduino @ ^1.4.0
+    lemio/esp32_ble_wedo @ ^2.0.0
+```
+
+## API Reference
+
 ### myWedo(char* name)
 
 Connect to a WEDO2.0 that is advertising with the defined name.
@@ -63,3 +88,5 @@ Sends a direct output command to the WEDO2.0
 * [Controlling a motor ](http://ofalcao.pt/blog/2016/controlling-wedo-2-0-motor-from-linux)
 * [Controlling RGB LED in python](http://ofalcao.pt/blog/2016/wedo-2-0-colors-with-python)
 * [Making apps for WEDO2.0 in app-inventor](http://ofalcao.pt/blog/2016/lego-wedo-2-0-with-mit-app-inventor)
+* [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) - The BLE library powering this project
+* [nRF Connect App](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-mobile)

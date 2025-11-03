@@ -36,6 +36,7 @@ class Wedo
     int connect();
     boolean connected();
     boolean ready();
+    void handleConnection();  // Call this in loop() to handle automatic reconnection
     int writeOutputCommand(uint8_t* command,int size);
     int writeInputCommand(uint8_t* command,int size);
     void writeMotor(uint8_t wedo_port,int wedo_speed);

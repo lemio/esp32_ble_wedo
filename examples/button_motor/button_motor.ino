@@ -37,6 +37,9 @@ void setup() {
 }
 
 void loop() {
+  // Handle automatic reconnection if connection is lost
+  myWedo.handleConnection();
+  
   //read the value from the button (on pin 0)
   boolean value = !digitalRead(0);
   //invert that value (HIGH->false and LOW->true),

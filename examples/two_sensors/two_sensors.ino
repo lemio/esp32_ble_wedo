@@ -53,6 +53,9 @@ void setup() {
 
 
 void loop() {
+  // Handle automatic reconnection if connection is lost
+  myWedo.handleConnection();
+  
   if (detectSensorValue != 0){
     myWedo.writeSound(detectSensorValue*10,200);
     myWedo.writeRGB(detectSensorValue*2.5,0,255-detectSensorValue*2.5);
