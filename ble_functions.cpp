@@ -294,7 +294,11 @@ void writeBLECommand(int type, uint8_t* command, int size) {
 
 // Set the device name to scan for
 void setName(const char* name) {
-    wedo_name = name;
+    if (name != nullptr && name[0] == '\0') {
+        wedo_name = nullptr;
+    } else {
+        wedo_name = name;
+    }
     recieved = true;
 }
 

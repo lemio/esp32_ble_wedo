@@ -48,7 +48,7 @@ is a LEGO wedo2.0 motor connected
 #include <esp32_ble_wedo.h>
 
 #include <WiFi.h>
-Wedo myWedo("test");
+Wedo myWedo();
 
 const char* ssid     = "The Shostakovich Network";
 const char* password = "MySecretPassword";

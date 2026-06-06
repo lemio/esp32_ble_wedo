@@ -24,7 +24,7 @@ at port 2 there should be a tilt sensor
 
 #include <esp32_ble_wedo.h>
 //Make myWedo object
-Wedo myWedo("test");
+Wedo myWedo();
 //Add a global variable detectSensorValue
 int detectSensorValue = 0;
 //Make the handleInput functions (try to avoid using wedo

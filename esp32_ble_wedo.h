@@ -32,7 +32,7 @@ static void (*portHandlers[WEDO_PORTS])(int8_t*,int);
 class Wedo
 {
   public:
-    Wedo(const char*);//,void (*f)(int));
+    Wedo(const char* name = nullptr);//,void (*f)(int));
     int connect();
     boolean connected();
     boolean ready();
