@@ -23,7 +23,7 @@ is a LEGO wedo2.0 motor connected
 
 #include <esp32_ble_wedo.h>
 
-Wedo myWedo();
+Wedo myWedo;
 
 void setup() {
   // put your setup code here, to run once:

@@ -1,6 +1,44 @@
 #include "esp32_ble_wedo.h"
 
+#define LWP_IMMEDIATE_NO_ACK 0x10
+#define LWP_PORT_OUTPUT_COMMAND 0x81
+#define LWP_WRITE_DIRECT_MODE_DATA 0x51
+#define LWP_EXTERNAL_PORT_A 0x00
+#define LWP_INTERNAL_LED_PORT 0x32
+
+static uint8_t _translateLwpPort(uint8_t wedo_port) {
+  if (wedo_port >= 1 && wedo_port <= WEDO_PORTS) {
+    return wedo_port - 1;
+  }
+
+  return wedo_port;
+}
+
+static int _writeLwpCommand(uint8_t port, uint8_t mode, const uint8_t* payload, uint8_t payload_size) {
+  const uint8_t header_size = 7;
+  uint8_t command[header_size + payload_size];
+
+  command[0] = header_size + payload_size;
+  command[1] = 0x00;
+  command[2] = LWP_PORT_OUTPUT_COMMAND;
+  command[3] = port;
+  command[4] = LWP_IMMEDIATE_NO_ACK;
+  command[5] = LWP_WRITE_DIRECT_MODE_DATA;
+  command[6] = mode;
+
+  for (uint8_t index = 0; index < payload_size; index++) {
+    command[header_size + index] = payload[index];
+  }
+
+  writeBLECommand(WEDO_OUTPUT, command, sizeof(command));
+  return 1;
+}
+
 static void _WEDOnotificationHandler(uint8_t* data, int size){
+  if (getBLEProtocol() != BLE_PROTOCOL_WEDO) {
+    return;
+  }
+
   if (size < 3) {
     printf("Invalid data size: %d\n", size);
     return;
@@ -78,6 +116,13 @@ int Wedo::writeInputCommand(uint8_t input_command[], int size)
 void Wedo::writeMotor(uint8_t wedo_port, int wedo_speed)
 {
   // From http://www.ev3dev.org/docs/tutorials/controlling-wedo2-motor/
+  if (getBLEProtocol() == BLE_PROTOCOL_LWP3) {
+    uint8_t speed_byte = static_cast<uint8_t>(wedo_speed);
+    uint8_t payload[] = {speed_byte};
+    _writeLwpCommand(_translateLwpPort(wedo_port), 0x00, payload, sizeof(payload));
+    return;
+  }
+
   // conversion from int (both pos and neg) to unsigned 8 bit int
   uint8_t speed_byte = wedo_speed;
   uint8_t command[] = {wedo_port, 0x01, 0x01, speed_byte};
@@ -85,17 +130,34 @@ void Wedo::writeMotor(uint8_t wedo_port, int wedo_speed)
 }
 
 void Wedo::writeIndexColor(uint8_t color){
+  if (getBLEProtocol() == BLE_PROTOCOL_LWP3) {
+    uint8_t payload[] = {color};
+    _writeLwpCommand(LWP_INTERNAL_LED_PORT, 0x00, payload, sizeof(payload));
+    return;
+  }
+
   // From http://ofalcao.pt/blog/2016/wedo-2-0-colors-with-python
   uint8_t command[] = {0x06, 0x04, 0x01, color};
   writeOutputCommand(command, sizeof(command));
 }
 
 void Wedo::writeRGB(uint8_t red, uint8_t green, uint8_t blue){
+  if (getBLEProtocol() == BLE_PROTOCOL_LWP3) {
+    uint8_t payload[] = {red, green, blue};
+    _writeLwpCommand(LWP_INTERNAL_LED_PORT, 0x01, payload, sizeof(payload));
+    return;
+  }
+
   uint8_t command[] = {0x06, 0x04, 0x03, red, green, blue};
   writeOutputCommand(command, sizeof(command));
 }
 
 void Wedo::writeSound(unsigned int frequency, unsigned int length){
+  if (getBLEProtocol() == BLE_PROTOCOL_LWP3) {
+    printf("writeSound is only supported for WEDO hubs\n");
+    return;
+  }
+
   // From https://github.com/vheun/wedo2/blob/master/index.js (setSound)
   uint8_t command[] = {
     0x05,
@@ -123,26 +185,49 @@ void Wedo::handleConnection(){
 }
 
 void Wedo::setRGBMode(){
+  if (getBLEProtocol() != BLE_PROTOCOL_WEDO) {
+    return;
+  }
+
   writePortDefinition(0x06, 0x17, 0x01, 0x02);
 }
 
 void Wedo::setIndexMode(){
+  if (getBLEProtocol() != BLE_PROTOCOL_WEDO) {
+    return;
+  }
+
   writePortDefinition(0x06, 0x17, 0x00, 0x00);
 }
 
 void Wedo::setDetectSensor(uint8_t port, inputHandlerFunction portHandler){
+  if (getBLEProtocol() != BLE_PROTOCOL_WEDO) {
+    printf("setDetectSensor is only supported for WEDO hubs\n");
+    return;
+  }
+
   writePortDefinition(port, ID_DETECT_SENSOR, 0, RANGE_100);
   devices[port-1] = ID_DETECT_SENSOR;
   portHandlers[port-1] = portHandler;
 }
 
 void Wedo::setTiltSensor(uint8_t port, inputHandlerFunction portHandler){
+  if (getBLEProtocol() != BLE_PROTOCOL_WEDO) {
+    printf("setTiltSensor is only supported for WEDO hubs\n");
+    return;
+  }
+
   writePortDefinition(port, ID_TILT_SENSOR, 0, RANGE_100);
   devices[port-1] = ID_TILT_SENSOR;
   portHandlers[port-1] = portHandler;
 }
 
 void Wedo::writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, uint8_t format){
+  if (getBLEProtocol() != BLE_PROTOCOL_WEDO) {
+    printf("writePortDefinition is only supported for WEDO hubs\n");
+    return;
+  }
+
   uint8_t command[] = {0x01, 0x02, port, type, mode, 0x01, 0x00, 0x00, 0x00, format, 0x01};
   printf("writePortDefinition with len: %d \n", sizeof(command));
   writeInputCommand(command, sizeof(command));

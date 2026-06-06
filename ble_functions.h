@@ -27,6 +27,16 @@ Define the UUID's to listen to
 #define WEDO_INPUT_UUID          "00001563-1212-efde-1523-785feabcd123"
 #define WEDO_BATTERY_UUID        "00001526-1212-efde-1523-785feabcd123"
 
+// LEGO Wireless Protocol 3.x hub service used by Powered Up / BOOST / train hubs.
+#define LWP_HUB_SERVICE_UUID         "00001623-1212-efde-1623-785feabcd123"
+#define LWP_HUB_CHARACTERISTIC_UUID  "00001624-1212-efde-1623-785feabcd123"
+
+enum BLEHubProtocol {
+  BLE_PROTOCOL_UNKNOWN = 0,
+  BLE_PROTOCOL_WEDO = 1,
+  BLE_PROTOCOL_LWP3 = 2,
+};
+
 // Forward declarations
 class WedoClientCallbacks;
 class WedoScanCallbacks;
@@ -37,12 +47,14 @@ static NimBLERemoteService* pWedoService = nullptr;
 static NimBLERemoteCharacteristic* pOutputCharacteristic = nullptr;
 static NimBLERemoteCharacteristic* pInputCharacteristic = nullptr;
 static NimBLERemoteCharacteristic* pSensorCharacteristic = nullptr;
+static NimBLERemoteCharacteristic* pHubCharacteristic = nullptr;
 
 static const NimBLEAdvertisedDevice* pTargetDevice = nullptr;
 static bool doConnect = false;
 static bool connected = false;
 static bool recieved = true;
 static uint32_t scanTimeMs = 5000;
+static BLEHubProtocol activeProtocol = BLE_PROTOCOL_UNKNOWN;
 
 static void (*globalHandler)(uint8_t*,int) = nullptr;
 static const char* wedo_name = nullptr;
@@ -65,6 +77,7 @@ void addBLEhandler(void (*f)(uint8_t*,int));
 void setName(const char* name);
 int getBLEReady();
 int getBLEConnected();
+BLEHubProtocol getBLEProtocol();
 bool connectToWedoServer();
 void notifyCallback(NimBLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify);
 void handleBLEConnection();  // New function to handle background reconnection

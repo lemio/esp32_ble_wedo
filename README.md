@@ -26,17 +26,24 @@ lib_deps =
 
 ## API Reference
 
-### myWedo(char* name)
+### myWedo(char* name = nullptr)
 
-Connect to a WEDO2.0 that is advertising with the defined name.
+Connect to a matching LEGO hub by advertised name. Pass no name to connect to the first supported hub found.
+
+Supported connection targets:
+- WEDO 2.0 hubs
+- Potentially LEGO Wireless Protocol 3.x hubs such as Powered Up / BOOST / train hubs
 
 ### myWedo.connect()
 
-Start connecting to the WEDO2.0 (do this after the wifi is initialized, if you're using wifi)
+Start connecting to the supported LEGO hub (do this after the wifi is initialized, if you're using wifi)
 
 ### myWedo.writeMotor(uint8_t wedo_port,int wedo_speed)
 
 Writes a certain speed (-100,100) to the specified port.
+
+On WEDO hubs the ports are numbered `1` and `2`.
+On Powered Up style hubs this library maps `1` to external port A and `2` to external port B.
 
 If you look in front of the WEDO ports;
 the back of the wedo, this is the port
@@ -69,6 +76,8 @@ Sets the color of the RGB led on the wedo, you can choose from the list below
 ### myWedo.writeSound(unsigned int frequency, unsigned int length)
 
 Let's the piezo in the WEDO make some noise, I'm not sure if the freqency and length are set correctly
+
+Note: sound and the WEDO sensor configuration helpers are still WEDO-specific. Motor output and hub LED color are the parts currently adapted for LEGO Hub 3.x devices.
 
 ### myWedo.writeOutputCommand(uint8_t* command)
 

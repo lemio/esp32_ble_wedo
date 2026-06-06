@@ -26,7 +26,7 @@ detect sensor
 #include <esp32_ble_wedo.h>
 
 //Make myWedo object
-Wedo myWedo();
+Wedo myWedo;
 //Add a global variable detectSensorValue
 int detectSensorValue = 0;
 //Make the handleInput function (try to avoid using wedo
