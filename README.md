@@ -2,7 +2,10 @@
 A library to control LEGO wedo with the ESP32 through Bluetooth low energy
 
 The button_motor.ino example:
-https://github.com/user-attachments/assets/ca30e0ec-d122-4a1c-8097-c969885a4933
+
+
+https://github.com/user-attachments/assets/92703554-2661-43a6-8563-1c84ce84e086
+
 
 ## Version 2.0.0 - Now using NimBLE-Arduino! 🎉
 
