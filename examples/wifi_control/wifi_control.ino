@@ -1,21 +1,20 @@
 /*
-  WiFi Web Server LED Blink
+  WiFi Web Server Motor Control
 
- A simple web server that lets you blink an LED via the web.
- This sketch will print the IP address of your WiFi Shield (once connected)
- to the Serial monitor. From there, you can open that address in a web browser
- to turn on and off the LED on pin 5.
+ A simple web server that lets you drive a LEGO motor via the web. This sketch will
+ print the IP address of your WiFi Shield (once connected) to the Serial monitor. From
+ there, you can open that address in a web browser to control the motor.
 
  If the IP address of your shield is yourAddress:
- http://yourAddress/H turns the LED on
- http://yourAddress/L turns it off
+ http://yourAddress/F drives the motor forward
+ http://yourAddress/S stops the motor
+ http://yourAddress/B drives the motor backwards
 
  This example is written for a network using WPA encryption. For
  WEP or WPA, change the Wifi.begin() call accordingly.
 
  Circuit:
  * WiFi shield attached
- * LED attached to pin 5
 
  created for arduino 25 Nov 2012
  by Tom Igoe
@@ -50,17 +49,14 @@ is a LEGO wedo2.0 motor connected
 #include <WiFi.h>
 PoweredUp myWedo;
 
-const char* ssid     = "The Shostakovich Network";
-const char* password = "MySecretPassword";
+const char* ssid     = "yourNetworkName";
+const char* password = "yourPassword";
 
 WiFiServer server(80);
 
 void setup()
 {
     Serial.begin(115200);
-    pinMode(5, OUTPUT);      // set the LED pin mode
-
-
 
     delay(10);
 
@@ -93,9 +89,10 @@ void setup()
 
 }
 
-int value = 0;
-
 void loop(){
+  // Handle automatic reconnection if connection is lost
+  myWedo.handleConnection();
+
  WiFiClient client = server.available();   // listen for incoming clients
 
   if (client) {                             // if you get a client,
@@ -131,15 +128,15 @@ void loop(){
           currentLine += c;      // add it to the end of the currentLine
         }
 
-        // Check to see if the client request was "GET /H" or "GET /L":
+        // Check to see if the client request was "GET /F", "GET /S", or "GET /B":
         if (currentLine.endsWith("GET /F")) {
-          myWedo.writeMotor(1,100);//digitalWrite(5, HIGH);               // GET /H turns the LED on
+          myWedo.writeMotor(1,100);      // GET /F drives the motor forward
         }
         if (currentLine.endsWith("GET /S")) {
-          myWedo.writeMotor(1,0);//digitalWrite(5, HIGH);               // GET /H turns the LED on
+          myWedo.writeMotor(1,0);        // GET /S stops the motor
         }
         if (currentLine.endsWith("GET /B")) {
-          myWedo.writeMotor(1,-100);//digitalWrite(5, LOW);                // GET /L turns the LED off
+          myWedo.writeMotor(1,-100);     // GET /B drives the motor backwards
         }
       }
     }

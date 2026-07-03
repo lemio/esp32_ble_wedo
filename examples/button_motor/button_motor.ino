@@ -13,8 +13,8 @@ https://creativecommons.org/licenses/by-sa/4.0/
 Connect the motor to any port on the lego lwp3 hub
 and the button to pin 0 on the ESP32. 
 
-When the button is pressed, 
-the motor will run and the LED will shine white.
+When the button is pressed,
+the motor will run and the LED will turn green (red when released).
 */
 
 #include <PoweredUp.h>
@@ -43,7 +43,7 @@ void loop() {
   //the motor and LED will shine
 
   //convert the boolean to a value that makes sense
-  //for the LED (white -> 10 in this case)
+  //for the LED (green while pressed, red while released)
   myHub.writeIndexColor(value ? LEGO_COLOR_GREEN : LEGO_COLOR_RED);
   //write a value to a motor connected
   myHub.writeMotor(value*100);

@@ -1,7 +1,5 @@
 #include "ble_functions.h"
 
-#define GATTC_TAG "WEDO_BLE"
-
 #define LEGO_COMPANY_ID_LSB 0x97
 #define LEGO_COMPANY_ID_MSB 0x03
 
@@ -173,6 +171,8 @@ void WedoScanCallbacks::onResult(const NimBLEAdvertisedDevice* advertisedDevice)
         }
 
         bool typeMatches = slot.targetType == BLE_DEVICE_TYPE_ANY ||
+                            (slot.targetType == BLE_DEVICE_TYPE_ANY_HUB && haveDeviceType &&
+                             deviceType != BLE_DEVICE_TYPE_POWERED_UP_REMOTE) ||
                             (haveDeviceType && slot.targetType == deviceType);
 
         if (nameMatches && typeMatches) {
@@ -518,7 +518,6 @@ static void _sendNow(BLESlot slot, int type, uint8_t* command, int size) {
 
     if (pChar->canWrite()) {
         if (pChar->writeValue(command, size, true)) {
-            // Serial.printf("Successfully wrote command\n");
             s.ready = true;
         } else {
             Serial.printf("Failed to write command\n");

@@ -8,7 +8,6 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-//#define KEYBLE_UUID_APPL_SRVC { 0x23,0xd1,0xbc,0xea,0x5f,0x78,0x23,0x15,0xde,0xef, 0x12, 0x12,0x23, 0x15 ,0x00,0x00} This is the nordic button service
 /*
 Define the UUID's to listen to
   -> Service is the main LEGO i/o service
@@ -87,6 +86,16 @@ class WedoScanCallbacks;
 // device" - matches LegoDeviceType::DEVICE_TYPE_ANY in PoweredUp.h, kept as a raw byte
 // here since ble_functions.h doesn't otherwise know about that enum.
 #define BLE_DEVICE_TYPE_ANY 0xFF
+// Sentinel for "any hub, but never a Remote Control" - matches
+// LegoDeviceType::DEVICE_TYPE_ANY_HUB in PoweredUp.h. Needed for sketches that connect
+// to a hub and a remote at the same time: an unfiltered BLE_DEVICE_TYPE_ANY hub slot
+// could otherwise claim the physical remote before the remote's own (more specific)
+// slot gets a chance to, since matching is first-slot-wins with no specificity priority.
+#define BLE_DEVICE_TYPE_ANY_HUB 0xFE
+// The raw manufacturer-data device-type byte for a Remote Control - matches
+// LegoDeviceType::DEVICE_TYPE_POWERED_UP_REMOTE in PoweredUp.h. Used to exclude remotes
+// when matching BLE_DEVICE_TYPE_ANY_HUB above.
+#define BLE_DEVICE_TYPE_POWERED_UP_REMOTE 0x42
 
 // A write that couldn't be sent immediately because it was attempted from inside a
 // notification callback (see bleWriteCommand()/notifyCallback() in ble_functions.cpp) -

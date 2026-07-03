@@ -50,10 +50,10 @@ const RGB legoColorRGB[11] = {
     {244, 244, 244},   // 10 WHITE
 };
 
-// Naming these by kind (rather than "any supported LEGO device") means this sketch
-// always connects the hub to the hub and the remote to the remote, however many other
-// LEGO devices happen to be nearby.
-PoweredUp hub(nullptr, DEVICE_TYPE_WEDO_HUB);
+// DEVICE_TYPE_ANY_HUB accepts any hub - WeDo 2.0, Powered Up, BOOST, train, Duplo - but
+// never a Remote Control, so this slot can't accidentally grab the physical remote
+// before the remote's own (more specific) slot below claims it.
+PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);
 PoweredUp remote(nullptr, DEVICE_TYPE_POWERED_UP_REMOTE);
 Adafruit_NeoPixel strip(NEOPIXEL_COUNT, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 

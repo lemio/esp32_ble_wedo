@@ -26,6 +26,10 @@
 // which matters once more than one kind of LEGO device is turned on nearby.
 enum LegoDeviceType : uint8_t {
   DEVICE_TYPE_ANY               = 0xFF, // no filtering - connect to the first supported device found
+  DEVICE_TYPE_ANY_HUB           = 0xFE, // any hub (WeDo, Powered Up, BOOST, train, Duplo) but never a Remote Control -
+                                         // useful when a sketch also has a separate PoweredUp instance specifically
+                                         // targeting DEVICE_TYPE_POWERED_UP_REMOTE, so the hub slot can't accidentally
+                                         // claim the physical remote before the remote's own slot does
   DEVICE_TYPE_WEDO_HUB          = 0x00,
   DEVICE_TYPE_DUPLO_TRAIN       = 0x20,
   DEVICE_TYPE_BOOST_HUB         = 0x40,
@@ -79,7 +83,7 @@ enum LedMode : uint8_t {
 
 // Remote Control button (IO_TYPE_REMOTE_BUTTON) - mode shapes/ranges verified live.
 enum RemoteButtonMode : uint8_t {
-  RCKEY = 0, // 1 byte: up(+)=1, down(-)=-1 (0xff), stop(red)=127, released=0 - USED BY monitorButton()... see KEYSD below
+  RCKEY = 0, // 1 byte: up(+)=1, down(-)=-1 (0xff), stop(red)=127, released=0 - not used by monitorButton(), which uses KEYSD instead
   KEYA  = 1, // 1 byte - exact meaning not yet verified
   KEYR  = 2, // 1 byte - exact meaning not yet verified
   KEYD  = 3, // 1 byte, range 0-7 - exact meaning not yet verified
@@ -180,7 +184,7 @@ class PoweredUp {
     void monitorTiltSensor(inputHandlerFunction callback);
     void monitorTiltSensor(int port, inputHandlerFunction callback);
     // Listen for the hub's own physical button (the LEGO-logo button on the hub itself -
-    // not a Remote Control's buttons). Powered Up / BOOST / train hubs only.
+    // not a Remote Control's buttons). Works on WeDo 2.0 and Powered Up / BOOST / train hubs.
     void monitorHubButton(inputHandlerFunction callback);
     // Advanced: listen to a specific mode yourself - see the *Mode enums above, or the
     // "Port mode information" table this library prints to Serial for what's actually

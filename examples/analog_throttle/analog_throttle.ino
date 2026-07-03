@@ -40,7 +40,7 @@ void loop() {
 
   int raw = analogRead(POT_PIN);            // 0-4095 on the ESP32's ADC
   int speed = map(raw, 0, 4095, -100, 100); // knob position -> motor speed/direction
-  hub.writeMotor(speed); //To define port, use hub.writeMotor('B',speed); for port A. 
+  hub.writeMotor(speed); // no port given - auto-detects the motor. To target a specific port instead, use hub.writeMotor('A', speed) or hub.writeMotor('B', speed).
   //Index color is only written when it changes.
   hub.writeIndexColor(colorIndex);
   delay(20);

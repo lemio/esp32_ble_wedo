@@ -50,8 +50,13 @@ void setup() {
 
 
 void loop() {
+  // Handle automatic reconnection if connection is lost
+  myHub.handleConnection();
+
   delay(100);
-  myHub.writeIndexColor(detectSensorValue/10);
+  // detectSensorValue is already 0-10, the same range as the LEGO_COLOR_* indices, so
+  // it maps directly onto the LED colour with no scaling needed.
+  myHub.writeIndexColor(detectSensorValue);
   delay(100);
   myHub.writeMotor(1,100-detectSensorValue);
 }

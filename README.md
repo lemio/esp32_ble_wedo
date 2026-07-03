@@ -47,9 +47,16 @@ void loop() {
 See [`examples/analog_throttle`](examples/analog_throttle) for the full sketch and wiring notes.
 
 
-## Version 2.0.0 - Now using NimBLE-Arduino! 🎉
+## Version 3.0.0 - the `PoweredUp` class 🎉
 
-This library has been completely refactored to use the modern **NimBLE-Arduino** library for improved performance, stability, and reduced memory usage. The public API remains 100% compatible with previous versions.
+This library was rewritten around a new `PoweredUp` class that replaces the old `Wedo`
+class - **this is a breaking change**, not a drop-in upgrade. Make one `PoweredUp`
+object per LEGO device you want to talk to (a hub, a Remote Control, ...) - you can have
+more than one connected to the same ESP32 at the same time. The same methods
+(`writeMotor()`, `writeIndexColor()`, `monitorDistance()`, ...) work the same way
+whether you're talking to a WeDo 2.0 hub or a Powered Up / BOOST / train hub - the
+library figures out which protocol it's using for you. It's still built on the modern
+**NimBLE-Arduino** library for performance, stability, and low memory usage.
 
 ### Requirements
 
@@ -67,45 +74,59 @@ Add to your `platformio.ini`:
 ```ini
 lib_deps = 
     h2zero/NimBLE-Arduino @ ^1.4.0
-    lemio/esp32_ble_wedo @ ^2.0.0
+    lemio/esp32_ble_wedo @ ^3.0.0
 ```
 
 ## API Reference
 
-### myWedo(char* name = nullptr)
+### PoweredUp(const char\* name = nullptr, LegoDeviceType deviceType = DEVICE_TYPE_ANY)
 
-Connect to a matching LEGO hub by advertised name. Pass no name to connect to the first supported hub found.
+Makes an object representing one LEGO device. Pass a `name` to match a specific
+device's advertised name, a `deviceType` to match a specific kind of device (see below),
+both, or neither to connect to the first supported LEGO device found.
 
-Supported connection targets:
-- WEDO 2.0 hubs
-- Potentially LEGO Wireless Protocol 3.x hubs such as Powered Up / BOOST / train hubs
+```cpp
+PoweredUp hub;                                             // any supported LEGO device
+PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);                // any hub, but never a Remote Control
+PoweredUp remote(nullptr, DEVICE_TYPE_POWERED_UP_REMOTE);   // specifically a Remote Control
+PoweredUp hub("My Train", DEVICE_TYPE_POWERED_UP_HUB);      // by name and kind
+```
 
-### myWedo.connect()
+`LegoDeviceType` values: `DEVICE_TYPE_ANY`, `DEVICE_TYPE_ANY_HUB`, `DEVICE_TYPE_WEDO_HUB`,
+`DEVICE_TYPE_DUPLO_TRAIN`, `DEVICE_TYPE_BOOST_HUB`, `DEVICE_TYPE_POWERED_UP_HUB` (train
+hub, city hub, etc.), `DEVICE_TYPE_POWERED_UP_REMOTE`.
 
-Start connecting to the supported LEGO hub (do this after the wifi is initialized, if you're using wifi)
+### connect(uint32_t timeoutMs = 30000)
 
-### myWedo.writeMotor(uint8_t wedo_port,int wedo_speed)
+Starts looking for the device and blocks until it's connected (or `timeoutMs` has
+passed). Safe to call on more than one `PoweredUp` object in a row in `setup()`.
 
-Writes a certain speed (-100,100) to the specified port.
+### connected() / ready()
 
-On WEDO hubs the ports are numbered `1` and `2`.
-On Powered Up style hubs this library maps `1` to external port A and `2` to external port B.
+`connected()` is true once the BLE connection is up. `ready()` is true once the last
+command you sent has finished.
 
-If you look in front of the WEDO ports;
-the back of the wedo, this is the port
-overview
-<pre>
- _________________
-|  port2 | port1  |
-|________|________|
-|                 |
-|                 |
-|_________________|
-</pre>
+### handleConnection()
 
-### myWedo.writeIndexColor(uint8_t color)
+Call this every `loop()` - keeps the connection alive and lets background work
+(reconnecting, re-subscribing sensors, discovering what's plugged in) happen.
 
-Sets the color of the RGB led on the wedo, you can choose from the list below
+### Actuators
+
+```cpp
+void writeMotor(int speed);                 // drives whichever motor is plugged in
+void writeMotor(int port, int speed);       // port: 'A'/'B' or 1/2, if you need to be specific
+void writeIndexColor(uint8_t color);        // a built-in LEGO colour, 0-10 - see LEGO_COLOR_* below
+void writeRGB(uint8_t red, uint8_t green, uint8_t blue); // mix your own colour, each channel 0-255
+void writeSound(unsigned int frequency, unsigned int length); // WeDo hubs only - piezo speaker
+void writeLight(int value);                 // a plugged-in simple LEGO Power Functions light, -100..100
+```
+
+`speed`/`value` ranges are all -100 to 100. `writeMotor(speed)`/`writeLight(value)` find
+the right port themselves - you only need the port-specific overload if more than one
+matching device is attached (e.g. two motors on one hub).
+
+`writeIndexColor()`'s built-in colours:
 <pre>
 #define LEGO_COLOR_BLACK 0
 #define LEGO_COLOR_PINK 1
@@ -119,27 +140,50 @@ Sets the color of the RGB led on the wedo, you can choose from the list below
 #define LEGO_COLOR_RED 9
 #define LEGO_COLOR_WHITE 10
 </pre>
-### myWedo.writeSound(unsigned int frequency, unsigned int length)
 
-Let's the piezo in the WEDO make some noise, I'm not sure if the freqency and length are set correctly
+### Sensors
 
-Note: sound and the WEDO sensor configuration helpers (`setDetectSensor`, `setTiltSensor`) are still WEDO-specific. Motor output and hub LED color are adapted for LEGO Hub 3.x devices, and input from external sensors on Powered Up / BOOST / train hubs is available through `setPortInputFormat`.
+Work on both WeDo 2.0 hubs and Powered Up / BOOST / train hubs:
 
-### myWedo.setPortInputFormat(uint8_t wedo_port, uint8_t mode, void (*portHandler)(int8_t*, int))
+```cpp
+void monitorButton(inputHandlerFunction callback);                  // Remote Control buttons: value[0]=up, value[1]=stop, value[2]=down
+void monitorButton(int port, inputHandlerFunction callback);
+void monitorDistance(inputHandlerFunction callback);                 // a distance/proximity sensor
+void monitorDistance(int port, inputHandlerFunction callback);
+void monitorTiltSensor(inputHandlerFunction callback);                // tilt angle, x/y degrees, -45 to 45
+void monitorTiltSensor(int port, inputHandlerFunction callback);
+void monitorHubButton(inputHandlerFunction callback);                  // the hub's own physical button
+void monitorInput(int port, inputHandlerFunction callback, uint8_t mode); // advanced: a specific mode yourself
+void stopMonitoring(int port);   // stop listening on one port
+void stopMonitoring();           // stop all monitoring on this connection
+```
 
-For LEGO Wireless Protocol 3.x hubs (Powered Up / BOOST / train hubs) only. Subscribes to input from a sensor attached to `wedo_port` (`1` or `2`, mapped to external port A/B) in the given `mode`, and calls `portHandler(value, size)` whenever the hub reports a new value.
+The no-port overloads find the right device themselves; on a WeDo 2.0 hub (which can't
+report what's plugged in on its own) this falls back to assuming port A unless told
+otherwise. `monitorInput()` is the general form the others are built on - see the
+`*Mode` enums in `PoweredUp.h`, or the "Port mode information" table the library prints
+to Serial whenever something attaches, for what modes a given device actually supports.
 
-The `mode` a sensor supports depends on the device (e.g. mode `0` is "Color" on the Color & Distance Sensor, and "Detect" on the Motion Sensor — check the [LEGO Wireless Protocol docs](https://lego.github.io/lego-ble-wireless-protocol-docs/) for your device). When a sensor is attached, the library prints its IO Type ID to Serial (`LWP3 device attached on port ... IO type ID: 0x...`) to help you identify it.
+### Advanced / escape hatches
 
-### myWedo.writeOutputCommand(uint8_t* command)
+```cpp
+void writeCommand(uint8_t* command, int size, int type = WEDO_OUTPUT); // send a raw command yourself
+void writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, uint8_t format); // WeDo 2.0 only
+void addNotificationHandler(void (*f)(uint8_t*, int)); // replaces the library's own notification handling with your own
+```
 
-Sends a direct output command to the WEDO2.0
+Most sketches won't need these - `writeCommand()`'s `type` defaults to `WEDO_OUTPUT`
+(motor/LED/sound commands); `WEDO_INPUT` is for the handful of WeDo-specific commands
+that need it.
 
 ## Examples
 
 * analog_throttle.ino (a breadboard potentiometer as a physical throttle for a real LEGO train - see above).
-* wifi_control.ino (it let's you set the direction of the motor connected to the wedo).
 * button_motor.ino (it let's you controll the motor with the build in button on the ESP). (Nice start if you want to make a remote for you WEDO creation)
+* sensor_motor.ino (drives a motor's speed and an LED colour from a distance/detect sensor's reading).
+* train_hub.ino (a simple standalone Powered Up / BOOST / train hub demo: motor, LED, tilt sensor).
+* train_remote.ino (a Remote Control driving a train hub - speed ramp with key-repeat, synced LED colours, a NeoPixel speed gauge).
+* wifi_control.ino (it let's you set the direction of the motor connected to the wedo, over a WiFi web page instead of BLE input).
 
 ## Prior art
 
