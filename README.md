@@ -1,10 +1,50 @@
 # esp32_ble_wedo
 A library to control LEGO wedo with the ESP32 through Bluetooth low energy
 
-The button_motor.ino example:
+## The button_motor.ino example:
 
 
 https://github.com/user-attachments/assets/92703554-2661-43a6-8563-1c84ce84e086
+
+## analog_throttle.ino — a breadboard knob driving a real LEGO train
+
+A potentiometer wired to the ESP32 acts as a physical throttle for a real LEGO train:
+turn it one way to speed up forward, the other way to reverse, center to stop. Pressing
+the hub's own button cycles its LED colour. A phone running the official LEGO app, or a
+JavaScript library on a laptop, can't do the knob part at all - they have no GPIO/ADC to
+read a physical control from. An ESP32 does, and this library turns that knob into a
+motor command in about 10 lines of code:
+
+```cpp
+#include <PoweredUp.h>
+
+#define POT_PIN 8  // potentiometer wiper - outer legs to 3.3V and GND
+
+PoweredUp hub; // connects to any supported LEGO hub - WeDo 2.0, Powered Up, BOOST, train hub
+int colorIndex = 1;
+
+void hubButtonAction(int8_t* value, int size) {
+  if (size < 1 || value[0] != 1) return;
+  colorIndex = (colorIndex % 9) + 1;
+  hub.writeIndexColor(colorIndex); // pressing the hub's own button cycles its LED
+}
+
+void setup() {
+  hub.connect();
+  hub.monitorHubButton(hubButtonAction);
+}
+
+void loop() {
+  hub.handleConnection();
+  int raw = analogRead(POT_PIN);
+  hub.writeMotor(map(raw, 0, 4095, -100, 100)); // knob position -> motor speed/direction
+  delay(20);
+}
+```
+
+<!-- TODO: record and embed a demo video here, showing the breadboard + potentiometer alongside the LEGO train responding to it -->
+
+See [`examples/analog_throttle`](examples/analog_throttle) for the full sketch and wiring notes.
 
 
 ## Version 2.0.0 - Now using NimBLE-Arduino! 🎉
@@ -97,6 +137,7 @@ Sends a direct output command to the WEDO2.0
 
 ## Examples
 
+* analog_throttle.ino (a breadboard potentiometer as a physical throttle for a real LEGO train - see above).
 * wifi_control.ino (it let's you set the direction of the motor connected to the wedo).
 * button_motor.ino (it let's you controll the motor with the build in button on the ESP). (Nice start if you want to make a remote for you WEDO creation)
 

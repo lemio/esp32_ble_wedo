@@ -45,10 +45,10 @@ is a LEGO wedo2.0 motor connected
 |_________________|
 
  */
-#include <esp32_ble_wedo.h>
+#include <PoweredUp.h>
 
 #include <WiFi.h>
-Wedo myWedo;
+PoweredUp myWedo;
 
 const char* ssid     = "The Shostakovich Network";
 const char* password = "MySecretPassword";

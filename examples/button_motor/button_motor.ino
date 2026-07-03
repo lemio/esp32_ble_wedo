@@ -6,31 +6,27 @@ https://www.analoglamb.com/product/esp32-development-board/
 @library
 https://github.com/lemio/esp32_ble_wedo
 @Status
-Working (but probably sub-optimal/stable)
+Working
 @licence
 https://creativecommons.org/licenses/by-sa/4.0/
 
-if you look in front of the WEDO ports,
-so the back of the wedo, on port 1 there
-is a LEGO wedo2.0 motor connected
- _________________
-|  port2 | port1  |
-|________|________|
-|                 |
-|                 |
-|_________________|
+Connect the motor to any port on the lego lwp3 hub
+and the button to pin 0 on the ESP32. 
+
+When the button is pressed, 
+the motor will run and the LED will shine white.
 */
 
-#include <esp32_ble_wedo.h>
+#include <PoweredUp.h>
 
-Wedo myWedo;
+PoweredUp myHub;
 
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
-  myWedo.connect();
+  myHub.connect();
   //Wait untill the wedo is connected to the ESP32
-  while (!myWedo.connected()){
+  while (!myHub.connected()){
     Serial.print(".");
     delay(100);
     }
@@ -38,7 +34,7 @@ void setup() {
 
 void loop() {
   // Handle automatic reconnection if connection is lost
-  myWedo.handleConnection();
+  myHub.handleConnection();
   
   //read the value from the button (on pin 0)
   boolean value = !digitalRead(0);
@@ -48,7 +44,7 @@ void loop() {
 
   //convert the boolean to a value that makes sense
   //for the LED (white -> 10 in this case)
-  myWedo.writeIndexColor(value*LEGO_COLOR_WHITE);
-  //write a value to the motor on port 1
-  myWedo.writeMotor(1,value*100);
+  myHub.writeIndexColor(value ? LEGO_COLOR_GREEN : LEGO_COLOR_RED);
+  //write a value to a motor connected
+  myHub.writeMotor(value*100);
 }
