@@ -83,7 +83,13 @@ Sets the color of the RGB led on the wedo, you can choose from the list below
 
 Let's the piezo in the WEDO make some noise, I'm not sure if the freqency and length are set correctly
 
-Note: sound and the WEDO sensor configuration helpers are still WEDO-specific. Motor output and hub LED color are the parts currently adapted for LEGO Hub 3.x devices.
+Note: sound and the WEDO sensor configuration helpers (`setDetectSensor`, `setTiltSensor`) are still WEDO-specific. Motor output and hub LED color are adapted for LEGO Hub 3.x devices, and input from external sensors on Powered Up / BOOST / train hubs is available through `setPortInputFormat`.
+
+### myWedo.setPortInputFormat(uint8_t wedo_port, uint8_t mode, void (*portHandler)(int8_t*, int))
+
+For LEGO Wireless Protocol 3.x hubs (Powered Up / BOOST / train hubs) only. Subscribes to input from a sensor attached to `wedo_port` (`1` or `2`, mapped to external port A/B) in the given `mode`, and calls `portHandler(value, size)` whenever the hub reports a new value.
+
+The `mode` a sensor supports depends on the device (e.g. mode `0` is "Color" on the Color & Distance Sensor, and "Detect" on the Motion Sensor — check the [LEGO Wireless Protocol docs](https://lego.github.io/lego-ble-wireless-protocol-docs/) for your device). When a sensor is attached, the library prints its IO Type ID to Serial (`LWP3 device attached on port ... IO type ID: 0x...`) to help you identify it.
 
 ### myWedo.writeOutputCommand(uint8_t* command)
 

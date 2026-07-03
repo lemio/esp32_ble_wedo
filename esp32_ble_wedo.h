@@ -21,11 +21,23 @@
 #define RANGE_10 0
 #define RANGE_100 1
 #define RANGE_RAW 2
+// Sentinel device id used for generic LWP3 (Powered Up / BOOST / train hub) sensors
+// attached via setPortInputFormat(), which don't have a WEDO-style device id.
+#define ID_LWP3_GENERIC_SENSOR 0xFF
 static void _WEDOnotificationHandler(uint8_t* data,int size);
 #define WEDO_PORTS 2
 static uint8_t devices[WEDO_PORTS] = {0,0};
 typedef void (*inputHandlerFunction)(int8_t*,int);
 static void (*portHandlers[WEDO_PORTS])(int8_t*,int);
+// Mode requested via setPortInputFormat(), remembered so a port's subscription can be
+// re-armed automatically after its device detaches and reattaches (LWP3 hubs drop the
+// subscription on detach).
+static uint8_t portModes[WEDO_PORTS] = {0,0};
+// Set from the BLE notification callback when a port needs its input format re-sent.
+// The actual BLE write is deferred to Wedo::handleConnection() (called from the sketch's
+// loop()) because issuing a GATT write synchronously from inside the NimBLE notification
+// callback exhausts the BLE stack's buffer pool.
+static bool portReArmPending[WEDO_PORTS] = {false,false};
 
 //static void (*port2Handler)(uint8_t*,int);
 
@@ -48,6 +60,7 @@ class Wedo
     void setTiltSensor(uint8_t port,inputHandlerFunction portHandler);
     void setDetectSensor(uint8_t port,inputHandlerFunction portHandler);
     void writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, uint8_t format);
+    void setPortInputFormat(uint8_t wedo_port, uint8_t mode, inputHandlerFunction portHandler);
     void addNotificationHandler(void (*f)(uint8_t*,int));
 };
 
