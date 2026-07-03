@@ -23,10 +23,10 @@ detect sensor
 |_________________|
 */
 
-#include <esp32_ble_wedo.h>
+#include <PoweredUp.h>
 
 //Make myWedo object
-Wedo myWedo;
+PoweredUp myHub;
 //Add a global variable detectSensorValue
 int detectSensorValue = 0;
 //Make the handleInput function (try to avoid using wedo
@@ -38,20 +38,20 @@ void handleInput(int8_t* value,int size){
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
-  myWedo.connect();
+  myHub.connect();
   //Wait untill the wedo is connected to the ESP32
-  while (!myWedo.connected()){
+  while (!myHub.connected()){
     Serial.print(".");
     delay(100);
     }
     delay(3000);
-    myWedo.setDetectSensor(2,handleInput);
+    myHub.monitorDistance(2,handleInput);
 }
 
 
 void loop() {
   delay(100);
-  myWedo.writeIndexColor(detectSensorValue/10);
+  myHub.writeIndexColor(detectSensorValue/10);
   delay(100);
-  myWedo.writeMotor(1,100-detectSensorValue);
+  myHub.writeMotor(1,100-detectSensorValue);
 }

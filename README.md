@@ -1,10 +1,50 @@
 # esp32_ble_wedo
 A library to control LEGO wedo with the ESP32 through Bluetooth low energy
 
-The button_motor.ino example:
+## The button_motor.ino example:
 
 
 https://github.com/user-attachments/assets/92703554-2661-43a6-8563-1c84ce84e086
+
+## analog_throttle.ino — a breadboard knob driving a real LEGO train
+
+A potentiometer wired to the ESP32 acts as a physical throttle for a real LEGO train:
+turn it one way to speed up forward, the other way to reverse, center to stop. Pressing
+the hub's own button cycles its LED colour. A phone running the official LEGO app, or a
+JavaScript library on a laptop, can't do the knob part at all - they have no GPIO/ADC to
+read a physical control from. An ESP32 does, and this library turns that knob into a
+motor command in about 10 lines of code:
+
+```cpp
+#include <PoweredUp.h>
+
+#define POT_PIN 8  // potentiometer wiper - outer legs to 3.3V and GND
+
+PoweredUp hub; // connects to any supported LEGO hub - WeDo 2.0, Powered Up, BOOST, train hub
+int colorIndex = 1;
+
+void hubButtonAction(int8_t* value, int size) {
+  if (size < 1 || value[0] != 1) return;
+  colorIndex = (colorIndex % 9) + 1;
+  hub.writeIndexColor(colorIndex); // pressing the hub's own button cycles its LED
+}
+
+void setup() {
+  hub.connect();
+  hub.monitorHubButton(hubButtonAction);
+}
+
+void loop() {
+  hub.handleConnection();
+  int raw = analogRead(POT_PIN);
+  hub.writeMotor(map(raw, 0, 4095, -100, 100)); // knob position -> motor speed/direction
+  delay(20);
+}
+```
+
+<!-- TODO: record and embed a demo video here, showing the breadboard + potentiometer alongside the LEGO train responding to it -->
+
+See [`examples/analog_throttle`](examples/analog_throttle) for the full sketch and wiring notes.
 
 
 ## Version 2.0.0 - Now using NimBLE-Arduino! 🎉
@@ -83,7 +123,13 @@ Sets the color of the RGB led on the wedo, you can choose from the list below
 
 Let's the piezo in the WEDO make some noise, I'm not sure if the freqency and length are set correctly
 
-Note: sound and the WEDO sensor configuration helpers are still WEDO-specific. Motor output and hub LED color are the parts currently adapted for LEGO Hub 3.x devices.
+Note: sound and the WEDO sensor configuration helpers (`setDetectSensor`, `setTiltSensor`) are still WEDO-specific. Motor output and hub LED color are adapted for LEGO Hub 3.x devices, and input from external sensors on Powered Up / BOOST / train hubs is available through `setPortInputFormat`.
+
+### myWedo.setPortInputFormat(uint8_t wedo_port, uint8_t mode, void (*portHandler)(int8_t*, int))
+
+For LEGO Wireless Protocol 3.x hubs (Powered Up / BOOST / train hubs) only. Subscribes to input from a sensor attached to `wedo_port` (`1` or `2`, mapped to external port A/B) in the given `mode`, and calls `portHandler(value, size)` whenever the hub reports a new value.
+
+The `mode` a sensor supports depends on the device (e.g. mode `0` is "Color" on the Color & Distance Sensor, and "Detect" on the Motion Sensor — check the [LEGO Wireless Protocol docs](https://lego.github.io/lego-ble-wireless-protocol-docs/) for your device). When a sensor is attached, the library prints its IO Type ID to Serial (`LWP3 device attached on port ... IO type ID: 0x...`) to help you identify it.
 
 ### myWedo.writeOutputCommand(uint8_t* command)
 
@@ -91,6 +137,7 @@ Sends a direct output command to the WEDO2.0
 
 ## Examples
 
+* analog_throttle.ino (a breadboard potentiometer as a physical throttle for a real LEGO train - see above).
 * wifi_control.ino (it let's you set the direction of the motor connected to the wedo).
 * button_motor.ino (it let's you controll the motor with the build in button on the ESP). (Nice start if you want to make a remote for you WEDO creation)
 
