@@ -23,6 +23,14 @@ on:
 permissions:
   contents: write
 
+# Queue overlapping runs instead of racing their pushes to docs/ - two runs both
+# committing on top of the same checkout otherwise fight over the same ref (seen in
+# practice: the second push gets rejected with "fetch first" and its build is lost,
+# since it only exists in that run's now-discarded workspace).
+concurrency:
+  group: publish-flasher-site
+  cancel-in-progress: false
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
@@ -40,4 +48,13 @@ jobs:
           git add docs
           git diff --cached --quiet && echo "No changes to publish" && exit 0
           git commit -m "Publish flasher site"
-          git push
+          # concurrency: above should prevent this, but retry with rebase as a fallback
+          # in case master moved for any other reason (e.g. a push landing mid-run).
+          for i in 1 2 3 4 5; do
+            git push && exit 0
+            echo "Push rejected (attempt $i/5) - fetching and rebasing before retrying"
+            git fetch origin master
+            git rebase origin/master
+          done
+          echo "Failed to push docs/ after 5 attempts" >&2
+          exit 1
