@@ -3,11 +3,11 @@ name: Build & publish flasher site
 # Builds every example (platformio.ini) and packages the binaries + a browser flashing
 # UI into docs/, using the reusable Action from lemio/ESP32-S3-Flasher - see that repo's
 # action/action.yml for what it does. Publishing docs/ itself (GitHub Pages source =
-# docs/ on main) is a one-time manual setting in this repo's Settings > Pages.
+# docs/ on master) is a one-time manual setting in this repo's Settings > Pages.
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - 'examples/**'
       - 'PoweredUp.h'
