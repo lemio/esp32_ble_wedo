@@ -19,7 +19,8 @@
         "path": "firmware/analog_throttle/firmware.bin",
         "offset": 65536
       }
-    ]
+    ],
+    "hardware": "esp32-s3-devkitc-1"
   },
   "button_motor": {
     "name": "button_motor.ino",
@@ -41,7 +42,8 @@
         "path": "firmware/button_motor/firmware.bin",
         "offset": 65536
       }
-    ]
+    ],
+    "hardware": "esp32-s3-devkitc-1"
   },
   "sensor_motor": {
     "name": "sensor_motor.ino",
@@ -63,7 +65,8 @@
         "path": "firmware/sensor_motor/firmware.bin",
         "offset": 65536
       }
-    ]
+    ],
+    "hardware": "esp32-s3-devkitc-1"
   },
   "train_hub": {
     "name": "train_hub.ino",
@@ -85,7 +88,8 @@
         "path": "firmware/train_hub/firmware.bin",
         "offset": 65536
       }
-    ]
+    ],
+    "hardware": "esp32-s3-devkitc-1"
   },
   "train_remote": {
     "name": "train_remote.ino",
@@ -107,7 +111,8 @@
         "path": "firmware/train_remote/firmware.bin",
         "offset": 65536
       }
-    ]
+    ],
+    "hardware": "esp32-s3-devkitc-1"
   },
   "wifi_control": {
     "name": "wifi_control.ino",
@@ -130,6 +135,7 @@
         "offset": 65536
       }
     ],
+    "hardware": "esp32-s3-devkitc-1",
     "variables": [
       {
         "firmware_name": "|*S*|",

@@ -21,66 +21,37 @@ const CONFIG = {
     // ESP32-S3-Devkit-C1 USB Port: {usbProductId: 4097 0x1001, usbVendorId: 12346 = 0x303A (ESPRESSIF)}
 };
 
-const FIRMWARE_CONFIGS = {
-    'amoled-t-display': {
-        name: 'Amoled T-Display Factory Firmware',
-        description: 'Default factory firmware for Amoled T-Display',
-        expectedBehavior: [
-            'Display shows factory test screen',
-            'Touch interface should be responsive',
-            'LEDs may light up in sequence'
-        ],
-        files: [
-            { path: 'Amoled-T-Display/Factory/Firmware/partitions.bin', offset: 0x8000 },
-            { path: 'Amoled-T-Display/Factory/Firmware/boot_app0.bin', offset: 0xe000 },
-            { path: 'Amoled-T-Display/Factory/Firmware/firmware.bin', offset: 0x10000 }
-        ]
-    },
-    'amoled-screencast': {
-        name: 'Amoled T-Display Screencast',
-        description: 'WebRTC streaming firmware with WiFi configuration',
-        expectedBehavior: [
-            'Device connects to WiFi network <b>|*S*|</b> with password <b>|*P*|</b>',
-            'Control the display via <a href="/Amoled-T-Display/Screencast/webrtc_stream.html?espAddress=|*M*|.local&sourceType=screen" target="_blank">this interface</a>',
-            'Access web local interface at <a href="http://|*M*|.local" target="_blank">http://|*M*|.local</a>',
-            'Stream display content via WebRTC',
-            'Display shows connection status'
-        ],
-        files: [
-            { path: 'Amoled-T-Display/Screencast/Firmware/bootloader.bin', offset: 0x0000 },
-            { path: 'Amoled-T-Display/Screencast/Firmware/partitions.bin', offset: 0x8000 },
-            { path: 'Amoled-T-Display/Screencast/Firmware/boot_app0.bin', offset: 0xe000 },
-            { path: 'Amoled-T-Display/Screencast/Firmware/firmware.bin', offset: 0x10000 }
-        ],
-        variables: [
-            {   
-                firmware_name: '|*S*|', 
-                readable_name: 'WiFi Name (SSID)', 
-                default_value: 'ESP32-S3-T-Display', 
-                max_length: 100 
-            },
-            {   
-                firmware_name: '|*P*|', 
-                readable_name: 'WiFi Password', 
-                default_value: 'testtest', 
-                max_length: 100 
-            },
-            {   
-                firmware_name: '|*M*|', 
-                readable_name: 'MDNS Hostname', 
-                default_value: 'esp32-s3-t-display', 
-                postfix: '.local', 
-                max_length: 100 
-            },
-            {   
-                firmware_name: 'WebRTC Stream', 
-                readable_name: 'Display Name', 
-                default_value: 'WebRTC Stream', 
-                max_length: 13 
-            }
-        ]
-    }
-};
+// No firmwares are hardcoded here anymore - this file is a generic flashing UI that any
+// repo can point at its own manifest.json (see README.md's "For PlatformIO projects"
+// section), or you can hand-add entries here directly. Shape of an entry, for reference:
+//
+// const FIRMWARE_CONFIGS = {
+//   'my-firmware-key': {
+//     name: 'Human-readable name',
+//     description: 'Brief description (wizard only)',
+//     hardware: 'ESP32-S3-DevKitC-1',      // board/chip this firmware targets - shown in the UI
+//     expectedBehavior: [                   // wizard only
+//       'What happens after flashing',
+//       'Can include HTML like <b>bold</b> or <a href="...">links</a>'
+//     ],
+//     files: [                              // firmware files to flash, standard ESP32 layout
+//       { path: 'path/to/bootloader.bin', offset: 0x0000 },
+//       { path: 'path/to/partitions.bin', offset: 0x8000 },
+//       { path: 'path/to/boot_app0.bin',  offset: 0xe000 },
+//       { path: 'path/to/firmware.bin',   offset: 0x10000 }
+//     ],
+//     variables: [                          // optional: flash-time-patchable placeholders
+//       {
+//         firmware_name: '|*S*|',           // exact string reserved in the compiled binary
+//         readable_name: 'WiFi Name',       // label shown to the user
+//         default_value: 'MyNetwork',       // shown as the default in the UI
+//         max_length: 100,                  // must match the fixed-size array in firmware source
+//         postfix: '.local'                 // optional: appended after the input in the UI
+//       }
+//     ]
+//   }
+// };
+const FIRMWARE_CONFIGS = {};
 
 // Export for ES6 modules
 export { CONFIG, FIRMWARE_CONFIGS };

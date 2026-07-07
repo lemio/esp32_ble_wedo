@@ -702,7 +702,7 @@
             document.querySelector('.firmware-info').innerHTML = `
                 <strong>Selected:</strong> ${config.name}<br>
                 <strong>Files:</strong> ${files}<br>
-                <strong>Chip:</strong> ${CONFIG.CHIP_NAME}
+                <strong>Chip:</strong> ${CONFIG.CHIP_NAME}${config.hardware ? `<br><strong>Board:</strong> ${config.hardware}` : ''}
             `;
             renderVariables(config);
             elements.downloadBtn.disabled = !config.variables?.length;
@@ -948,11 +948,17 @@
                 updateProgress(90);
                 log('Flash complete! Resetting device...', 'success');
                 
-                // ESP32-S3 needs special handling to exit boot mode and run the app
+                // ESP32-S3 needs special handling to exit boot mode and run the app.
+                // usingUsbOtg must be true for boards connected via their native
+                // USB-JTAG/Serial peripheral (PID 0x1001, e.g. the ESP32-S3's built-in
+                // USB port) - esptool-js's hard_reset otherwise only pulses RTS with a
+                // shorter delay, which isn't enough to actually reset this connection
+                // type (this is also why PlatformIO's own upload can hard-reset
+                // reliably but this tool previously couldn't: it never passed this flag).
                 try {
-                    // First, try to cleanly disconnect the stub to exit download mode
                     log('Exiting download mode...', 'info');
-                    await esploader.after(); // reboot=true
+                    const usingUsbOtg = transport.getPid() === esploader.USB_JTAG_SERIAL_PID;
+                    await esploader.after('hard_reset', usingUsbOtg);
                     log('Device should now boot into application', 'success');
                     } catch (e) {
                     log('Could not automatically reset - please press RESET button on device', 'warning');

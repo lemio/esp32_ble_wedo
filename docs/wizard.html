@@ -344,6 +344,17 @@
             color: #6b7280;
         }
 
+        .firmware-card .hardware {
+            display: inline-block;
+            margin-top: 6px;
+            font-size: 0.7em;
+            font-weight: 600;
+            color: #4b5563;
+            background: #f3f4f6;
+            border-radius: 4px;
+            padding: 2px 6px;
+        }
+
         .variable-input-group {
             margin-bottom: 12px;
         }
@@ -1008,6 +1019,7 @@
                 card.innerHTML = `
                     <h3>${config.name}</h3>
                     <p>${config.description}</p>
+                    ${config.hardware ? `<span class="hardware">${config.hardware}</span>` : ''}
                 `;
                 card.addEventListener('click', () => selectFirmware(key));
                 container.appendChild(card);
@@ -1188,12 +1200,27 @@
                 
                 log('✅ Flash complete!', 3);
                 document.getElementById('flashStatus').textContent = 'Flash complete! Resetting device...';
-                
-                // Show reset instructions
+
+                // Try to reset automatically first - usingUsbOtg must be true for
+                // boards connected via their native USB-JTAG/Serial peripheral (PID
+                // 0x1001, e.g. the ESP32-S3's built-in USB port), or esptool-js's
+                // hard_reset won't actually toggle the right sequence. If this doesn't
+                // trigger a disconnect (some boards/browsers still need a physical
+                // press), the instructions below still work as a fallback.
+                try {
+                    const usingUsbOtg = transport.getPid() === esploader.USB_JTAG_SERIAL_PID;
+                    await esploader.after('hard_reset', usingUsbOtg);
+                    log('✓ Sent automatic reset', 3);
+                } catch (e) {
+                    log('Automatic reset failed - press RESET manually', 2);
+                }
+
+                // Show reset instructions (fallback for boards where the automatic
+                // reset above doesn't trigger a disconnect)
                 document.getElementById('resetInstructions').style.display = 'block';
-                document.getElementById('flashStatus').textContent = 'Flash complete - press RESET to continue';
-                
-                // Wait for device disconnect (happens when user presses RESET)
+                document.getElementById('flashStatus').textContent = 'Flash complete - press RESET if the device doesn\'t continue automatically';
+
+                // Wait for device disconnect (happens automatically above, or when the user presses RESET)
                 const waitForDisconnect = new Promise((resolve) => {
                     const handleDisconnect = (event) => {
                         if (event.target === device) {
