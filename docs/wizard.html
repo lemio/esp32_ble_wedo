@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-S3 Flash Wizard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            background: #f8f9fa;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        .wizard-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            max-width: 1100px;
+            width: 100%;
+            height: calc(100vh - 40px);
+            max-height: 900px;
+            display: flex;
+            flex-direction: column;
+            padding: 40px 48px;
+        }
+
+        .wizard-header {
+            text-align: center;
+            margin-bottom: 24px;
+            flex-shrink: 0;
+        }
+
+        .wizard-header h1 {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #1a1a1a;
+            letter-spacing: -0.02em;
+        }
+
+        .progress-steps {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .step-indicator {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 16px;
+            left: -50%;
+            right: 50%;
+            height: 2px;
+            background: #f0f0f0;
+            z-index: 0;
+        }
+
+        .step-indicator:first-child::before {
+            display: none;
+        }
+
+        .step-indicator.completed::before {
+            background: #d1d5db;
+        }
+
+        .step-indicator.active::before {
+            background: linear-gradient(to right, #d1d5db 0%, #f0f0f0 100%);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #f0f0f0;
+            color: #9ca3af;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9em;
+            margin-bottom: 6px;
+            transition: all 0.2s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-indicator.active .step-number {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .step-indicator.completed .step-number {
+            background: #d1d5db;
+            color: white;
+        }
+
+        .step-indicator.completed .step-number::before {
+            content: '✓';
+        }
+
+        .step-indicator.completed .step-label {
+            color: #d1d5db;
+        }
+
+        .step-label {
+            font-size: 0.75em;
+            color: #9ca3af;
+            font-weight: 500;
+        }
+
+        .step-indicator.active .step-label {
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .wizard-content {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .step-content {
+            display: none;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .step-content.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .step-title {
+            font-size: 0.875em;
+            font-weight: 600;
+            color: #6b7280;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .animation-box {
+            background: #fafafa;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 16px 0;
+            text-align: center;
+        }
+
+        .device-animation {
+            width: 200px;
+            height: 300px;
+            margin: 0 auto 24px;
+            position: relative;
+        }
+
+        .device-board {
+            width: 100%;
+            height: 100%;
+            background: #2d3748;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .usb-port {
+            width: 40px;
+            height: 12px;
+            background: #718096;
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 2px;
+        }
+
+        .usb-cable {
+            width: 4px;
+            height: 0;
+            background: #4a5568;
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: height 1s ease;
+        }
+
+        .usb-cable.connected {
+            height: 60px;
+        }
+
+        .button {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .boot-button {
+            background: #3b82f6;
+            bottom: 60px;
+            left: 20px;
+        }
+
+        .reset-button {
+            background: #ef4444;
+            bottom: 60px;
+            right: 20px;
+        }
+
+        .button.pressed {
+            transform: scale(0.9);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .button-label {
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.65em;
+            color: white;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .led {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #4b5563;
+            transition: all 0.3s ease;
+        }
+
+        .led.on {
+            background: #10b981;
+            box-shadow: 0 0 12px #10b981;
+        }
+
+        .led.flashing {
+            animation: flash 0.5s infinite;
+        }
+
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .instruction-text {
+            font-size: 0.9em;
+            color: #1a1a1a;
+            font-weight: 500;
+            margin-top: 16px;
+        }
+
+        .instruction-steps {
+            text-align: left;
+            display: inline-block;
+            margin-top: 16px;
+        }
+
+        .instruction-steps li {
+            margin-bottom: 8px;
+            color: #4b5563;
+            line-height: 1.6;
+        }
+
+        .console {
+            display: none;
+            background: #fafafa;
+            color: #1a1a1a;
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.75em;
+            max-height: 120px;
+            overflow-y: auto;
+            margin: 16px 0;
+            line-height: 1.5;
+            border: 1px solid #f0f0f0;
+        }
+
+        .console:empty::before {
+            content: 'Waiting for connection...';
+            color: #9ca3af;
+        }
+
+        .firmware-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .firmware-card:hover {
+            border-color: #1a1a1a;
+        }
+
+        .firmware-card.selected {
+            border-color: #1a1a1a;
+            background: #fafafa;
+        }
+
+        .firmware-card h3 {
+            font-size: 0.95em;
+            margin-bottom: 4px;
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .firmware-card p {
+            font-size: 0.8em;
+            color: #6b7280;
+        }
+
+        .variable-input-group {
+            margin-bottom: 12px;
+        }
+
+        .variable-input-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.875em;
+            color: #1a1a1a;
+            font-weight: 500;
+        }
+
+        .variable-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .variable-input-wrapper input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.85em;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            transition: all 0.15s ease;
+        }
+
+        .variable-input-wrapper input:focus {
+            outline: none;
+            border-color: #1a1a1a;
+        }
+
+        .variable-input-wrapper input:hover {
+            border-color: #d1d5db;
+        }
+
+        .variable-input-wrapper .postfix {
+            color: #6b7280;
+            font-size: 0.875em;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 6px;
+            background: #f0f0f0;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 20px 0 12px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: #1a1a1a;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 0.85em;
+            color: #6b7280;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        .wizard-actions {
+            padding-top: 16px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            border-top: 1px solid #f0f0f0;
+            flex-shrink: 0;
+            margin-top: auto;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-family: inherit;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #fafafa;
+            border-color: #1a1a1a;
+            color: #1a1a1a;
+        }
+
+        .btn-primary {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #000000;
+        }
+
+        .btn-primary.highlight {
+            background: #10b981;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .btn-primary.highlight:hover:not(:disabled) {
+            background: #059669;
+        }
+
+        @keyframes pulse {
+            0%, 100% { 
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+            }
+            50% { 
+                box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+            }
+        }
+
+        .btn-primary:disabled,
+        .btn-secondary:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .success-animation {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .success-checkmark {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #1a1a1a;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .success-checkmark::after {
+            content: '✓';
+            color: white;
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .expected-result {
+            background: #fafafa;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .expected-result h4 {
+            font-size: 0.9em;
+            margin-bottom: 12px;
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        .expected-result p {
+            font-size: 0.85em;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .alert {
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 0.85em;
+            border: 1px solid;
+        }
+
+        .alert-info {
+            background: #fafafa;
+            color: #1a1a1a;
+            border-color: #e5e7eb;
+        }
+
+        .alert-warning {
+            background: #fffbeb;
+            color: #92400e;
+            border-color: #fef3c7;
+        }
+
+        .alert-success {
+            background: #f0fdf4;
+            color: #166534;
+            border-color: #dcfce7;
+        }
+
+        .chip-info {
+            background: #fafafa;
+            border: 1px solid #f0f0f0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 0 0 16px 0;
+        }
+
+        .chip-info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.8em;
+        }
+
+        .chip-info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .chip-info-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .chip-info-value {
+            color: #1a1a1a;
+            font-weight: 600;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .wizard-container {
+                padding: 24px 20px;
+                height: calc(100vh - 20px);
+                border-radius: 8px;
+            }
+
+            .wizard-header h1 {
+                font-size: 1.25em;
+            }
+
+            .step-label {
+                font-size: 0.65em;
+            }
+
+            button {
+                padding: 10px 20px;
+                font-size: 0.85em;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .wizard-container {
+                padding: 20px 16px;
+            }
+
+            .step-number {
+                width: 28px;
+                height: 28px;
+                font-size: 0.8em;
+            }
+
+            .step-label {
+                font-size: 0.6em;
+            }
+
+            .wizard-header h1 {
+                font-size: 1.1em;
+            }
+        }
+
+        #configureFirmwareTitle{
+            display: none !important;
+        }
+        #chipInfoBox{
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="wizard-container">
+        <div class="wizard-header">
+            <h1>ESP32-S3 Flash Wizard</h1>
+        </div>
+
+        <div class="progress-steps">
+            <div class="step-indicator active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">Connect</div>
+            </div>
+            <div class="step-indicator" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">Configure</div>
+            </div>
+            <div class="step-indicator" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">Flash</div>
+            </div>
+            <div class="step-indicator" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-label">Complete</div>
+            </div>
+        </div>
+
+        <div class="wizard-content">
+            <!-- Step 1: Connect Device -->
+            <div class="step-content active" data-step="1">
+                <h2 class="step-title">Connect Device</h2>
+                
+                <div class="two-column">
+                    <div>
+                        <div class="alert alert-info">
+                            <strong>⚠️</strong> Device must be in boot mode to flash firmware
+                        </div>
+
+                        <div class="instruction-steps">
+                            <strong style="font-size: 0.9em; color: #1a1a1a;">Boot Mode Instructions:</strong>
+                            <ol style="margin-top: 12px; padding-left: 20px; line-height: 1.8; font-size: 0.85em;">
+                                <li>Hold the <strong>BOOT</strong> button</li>
+                                <li>While holding BOOT, press <strong>RESET</strong></li>
+                                <li>Release both buttons</li>
+                                <li>Device is now in boot mode</li>
+                            </ol>
+                            <p style="margin-top: 12px; color: #6b7280; font-size: 0.8em;"><em>Alternative: Hold BOOT while connecting USB</em></p>
+                        </div>
+
+                        <div class="console" id="consoleStep1"></div>
+                    </div>
+
+                    <div class="animation-box">
+                        <video autoplay loop muted playsinline style="width: 100%; max-width: 300px; height: 300px; object-fit: cover; border-radius: 8px;">
+                            <source src="boot_mode.webm" type="video/webm">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Select Firmware -->
+            <div class="step-content" data-step="2">
+                <h2 class="step-title" id="configureFirmwareTitle">Configure Firmware</h2>
+
+                <div class="chip-info" id="chipInfoBox" style="display: none;">
+                    <div class="chip-info-row">
+                        <span class="chip-info-label">Chip:</span>
+                        <span class="chip-info-value" id="detectedChip">-</span>
+                    </div>
+                    <div class="chip-info-row">
+                        <span class="chip-info-label">MAC:</span>
+                        <span class="chip-info-value" id="macAddress">-</span>
+                    </div>
+                    <div class="chip-info-row">
+                        <span class="chip-info-label">Features:</span>
+                        <span class="chip-info-value" id="chipFeatures">-</span>
+                    </div>
+                </div>
+
+                <h3 style="margin: 16px 0 10px; font-size: 0.8em; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Select Firmware</h3>
+                <div id="firmwareList"></div>
+
+                <div id="variablesContainer" style="margin-top: 12px;"></div>
+            </div>
+
+            <!-- Step 3: Flash Firmware -->
+            <div class="step-content" data-step="3">
+                <h2 class="step-title">Flash Progress</h2>
+
+                <div class="alert alert-info">
+                    <strong>Status:</strong> <span id="flashStatus">Preparing to flash...</span>
+                </div>
+
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="flashProgress"></div>
+                </div>
+                <div class="progress-text" id="flashProgressText">0%</div>
+
+                <div class="console" id="consoleStep3"></div>
+
+                <div id="resetInstructions" style="display: none;">
+                    <div class="alert alert-warning">
+                        <strong>⚠️</strong> Press RESET button on device to start firmware
+                    </div>
+
+                    <div style="text-align: center; margin-top: 20px;">
+                        <video autoplay loop muted playsinline style="width: 100%; max-width: 300px; height: 300px; object-fit: cover; border-radius: 8px;">
+                            <source src="reset_only.webm" type="video/webm">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Complete -->
+            <div class="step-content" data-step="4">
+                <div class="success-animation">
+                    <div class="success-checkmark"></div>
+                    <h2 style="font-size: 1.5em; margin-bottom: 8px; font-weight: 600;">Flash Complete</h2>
+                    <p style="color: #6b7280; font-size: 0.9em;">
+                        Your ESP32-S3 has been successfully flashed
+                    </p>
+                </div>
+
+                <div id="configSummary" style="display: none;" class="chip-info">
+                    <h4 style="font-size: 0.9em; margin-bottom: 12px; color: #1a1a1a; font-weight: 600;">Configuration Summary</h4>
+                    <div id="configSummaryContent"></div>
+                </div>
+
+                <div class="expected-result">
+                    <h4>What to Expect</h4>
+                    <p id="expectedBehavior">
+                        Your device is now running the new firmware:
+                    </p>
+                    <ul id="expectedBehaviorList" style="margin-top: 10px; padding-left: 20px; color: #6b7280; font-size: 0.85em; line-height: 1.7;">
+                    </ul>
+                </div>
+
+                <div class="console" id="consoleStep4"></div>
+            </div>
+        </div>
+
+        <div class="wizard-actions">
+            <button class="btn-secondary" id="prevBtn" style="display: none;">Previous</button>
+            <button class="btn-primary" id="nextBtn">Connect Device</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { Transport, ESPLoader } from 'https://unpkg.com/esptool-js@0.5.7/bundle.js';
+        import { CONFIG, FIRMWARE_CONFIGS } from './config.js';
+
+        // ==================== STATE ====================
+        
+        let currentStep = 1;
+        let esploader = null;
+        let device = null;
+        let transport = null;
+        let selectedFirmware = null;
+        let chipInfo = {};
+        let isDeviceConnected = false;
+
+        // Check URL parameter for password hiding
+        const urlParams = new URLSearchParams(window.location.search);
+        const hidePassword = urlParams.get('hidePassword') === 'true';
+
+        // ==================== UTILITY FUNCTIONS ====================
+        
+        const log = (message, step = currentStep) => {
+            const consoleEl = document.getElementById(`consoleStep${step}`);
+            if (consoleEl) {
+                const time = new Date().toLocaleTimeString();
+                consoleEl.innerHTML += `[${time}] ${message}\n`;
+                consoleEl.scrollTop = consoleEl.scrollHeight;
+            }
+        };
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        const storage = {
+            get: (key, defaultValue) => localStorage.getItem(`fw_var_${key}`) ?? defaultValue,
+            set: (key, value) => localStorage.setItem(`fw_var_${key}`, value)
+        };
+
+        const binaryUtils = {
+            arrayBufferToString: (buffer) => {
+                const bytes = new Uint8Array(buffer);
+                return Array.from(bytes, byte => String.fromCharCode(byte)).join('');
+            },
+            
+            stringToArrayBuffer: (str) => {
+                const buffer = new Uint8Array(str.length);
+                for (let i = 0; i < str.length; i++) {
+                    buffer[i] = str.charCodeAt(i);
+                }
+                return buffer;
+            }
+        };
+
+        // ==================== ANIMATION FUNCTIONS ====================
+        
+        // Animation functions removed - using video files instead
+
+        // ==================== FIRMWARE FUNCTIONS ====================
+        
+        const calculateChecksum = (binaryString) => {
+            const segmentCount = binaryString.charCodeAt(1);
+            let checksum = 0xEF;
+            let offset = 24;
+            
+            for (let i = 0; i < segmentCount; i++) {
+                const segDataLen = binaryString.charCodeAt(offset + 4) | 
+                                  (binaryString.charCodeAt(offset + 5) << 8) |
+                                  (binaryString.charCodeAt(offset + 6) << 16) | 
+                                  (binaryString.charCodeAt(offset + 7) << 24);
+                
+                offset += 8;
+                
+                for (let j = 0; j < segDataLen; j++) {
+                    checksum ^= binaryString.charCodeAt(offset + j);
+                }
+                
+                offset += segDataLen;
+            }
+            
+            return checksum;
+        };
+
+        const recalculateFirmwareIntegrity = async (binaryString) => {
+            if (binaryString.charCodeAt(0) !== 0xE9) {
+                return binaryString;
+            }
+
+            const appendDigest = binaryString.charCodeAt(23);
+            const hasSHA256 = binaryString.length >= 33 && 
+                             binaryString.length % 16 === 0 && 
+                             appendDigest !== 0x00;
+
+            const imageData = hasSHA256 ? binaryString.substring(0, binaryString.length - 32) : binaryString;
+            const newChecksum = calculateChecksum(binaryString);
+            let rebuiltImage = imageData.substring(0, imageData.length - 1) + String.fromCharCode(newChecksum);
+
+            if (hasSHA256) {
+                const dataArray = binaryUtils.stringToArrayBuffer(rebuiltImage);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', dataArray);
+                const hashArray = new Uint8Array(hashBuffer);
+                const hashString = String.fromCharCode(...hashArray);
+                rebuiltImage += hashString;
+            }
+
+            return rebuiltImage;
+        };
+
+        const replaceVariables = async (binaryString, variables) => {
+            let modified = binaryString;
+            let changeCount = 0;
+
+            for (const variable of variables) {
+                const input = document.querySelector(`[data-firmware-name="${variable.firmware_name}"]`);
+                if (!input) continue;
+
+                const value = input.value;
+                const searchString = variable.firmware_name;
+                const maxLen = variable.max_length || 100;
+                
+                let searchIndex = modified.indexOf(searchString);
+                if (searchIndex === -1) continue;
+
+                let replacement = value + '\0';
+                while (replacement.length < maxLen) replacement += '\0';
+                if (replacement.length > maxLen) {
+                    replacement = replacement.substring(0, maxLen);
+                }
+
+                let occurrences = 0;
+                while (searchIndex !== -1) {
+                    const original = modified.substring(searchIndex, searchIndex + maxLen);
+                    if (replacement !== original) {
+                        modified = modified.substring(0, searchIndex) + replacement + modified.substring(searchIndex + maxLen);
+                        occurrences++;
+                        changeCount++;
+                    }
+                    searchIndex = modified.indexOf(searchString, searchIndex + maxLen);
+                }
+                
+                if (occurrences > 0) {
+                    log(`✓ Configured ${variable.readable_name}`, 3);
+                }
+            }
+
+            if (changeCount > 0) {
+                modified = await recalculateFirmwareIntegrity(modified);
+            }
+
+            return modified;
+        };
+
+        const loadFirmware = async (path) => {
+            const response = await fetch(path);
+            if (!response.ok) throw new Error(`Failed to load ${path}`);
+            const buffer = await response.arrayBuffer();
+            return binaryUtils.arrayBufferToString(buffer);
+        };
+
+        // ==================== STEP FUNCTIONS ====================
+        
+        const updateStepIndicators = () => {
+            document.querySelectorAll('.step-indicator').forEach((indicator, index) => {
+                const step = index + 1;
+                indicator.classList.remove('active', 'completed');
+                
+                if (step < currentStep) {
+                    indicator.classList.add('completed');
+                } else if (step === currentStep) {
+                    indicator.classList.add('active');
+                }
+            });
+
+            document.querySelectorAll('.step-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelector(`.step-content[data-step="${currentStep}"]`)?.classList.add('active');
+        };
+
+        const updateButtons = () => {
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+
+            prevBtn.style.display = currentStep > 1 && currentStep < 4 ? 'block' : 'none';
+
+            // Remove highlight class from all buttons first
+            nextBtn.classList.remove('highlight');
+
+            if (currentStep === 1) {
+                if (isDeviceConnected) {
+                    nextBtn.textContent = 'Reconnect Device';
+                    nextBtn.disabled = false;
+                } else {
+                    nextBtn.textContent = 'Connect Device';
+                    nextBtn.disabled = false;
+                    nextBtn.classList.add('highlight');
+                }
+            } else if (currentStep === 2) {
+                nextBtn.textContent = 'Flash Firmware';
+                nextBtn.disabled = !selectedFirmware;
+                if (selectedFirmware) {
+                    nextBtn.classList.add('highlight');
+                }
+            } else if (currentStep === 3) {
+                nextBtn.style.display = 'none';
+            } else if (currentStep === 4) {
+                nextBtn.textContent = 'Flash Another Device';
+                nextBtn.style.display = 'block';
+            }
+        };
+
+        const renderFirmwareList = () => {
+            const container = document.getElementById('firmwareList');
+            container.innerHTML = '';
+
+            Object.entries(FIRMWARE_CONFIGS).forEach(([key, config]) => {
+                const card = document.createElement('div');
+                card.className = 'firmware-card';
+                card.innerHTML = `
+                    <h3>${config.name}</h3>
+                    <p>${config.description}</p>
+                `;
+                card.addEventListener('click', () => selectFirmware(key));
+                container.appendChild(card);
+            });
+        };
+
+        const selectFirmware = (key) => {
+            selectedFirmware = key;
+            
+            document.querySelectorAll('.firmware-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            event.target.closest('.firmware-card').classList.add('selected');
+
+            renderVariables(FIRMWARE_CONFIGS[key]);
+            updateButtons();
+        };
+
+        const renderVariables = (config) => {
+            const container = document.getElementById('variablesContainer');
+            
+            if (!config.variables?.length) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '<h3 style="margin: 16px 0 10px; font-size: 0.8em; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Configuration</h3>';
+            
+            config.variables.forEach((v, i) => {
+                const value = storage.get(v.firmware_name, v.default_value);
+                const isPassword = v.readable_name.toLowerCase().includes('password');
+                const inputType = (hidePassword && isPassword) ? 'password' : 'text';
+                const labelClass = (hidePassword && isPassword) ? 'style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a; filter: blur(4px); user-select: none;"' : 'style="font-size: 0.8em; margin-bottom: 4px; color: #1a1a1a;"';
+                
+                html += `
+                    <div class="variable-input-group">
+                        <label for="var_${i}" ${labelClass}>${v.readable_name}</label>
+                        <div class="variable-input-wrapper">
+                            <input type="${inputType}" id="var_${i}" value="${value}" maxlength="${v.max_length || 100}" 
+                                   data-firmware-name="${v.firmware_name}"
+                                   ${hidePassword && isPassword ? 'style="filter: blur(4px);"' : ''}>
+                            ${v.postfix ? `<span class="postfix">${v.postfix}</span>` : ''}
+                        </div>
+                    </div>`;
+            });
+            
+            container.innerHTML = html;
+
+            config.variables.forEach((v, i) => {
+                const input = document.getElementById(`var_${i}`);
+                input.addEventListener('input', (e) => storage.set(v.firmware_name, e.target.value));
+            });
+        };
+
+        // ==================== CONNECTION ====================
+        
+        const connectDevice = async () => {
+            try {
+                log('🔌 Requesting device access...', 1);
+                
+                device = await navigator.serial.requestPort({
+                    filters: CONFIG.FILTERS
+                });
+                
+                // Add disconnect listener
+                const handleDisconnect = (event) => {
+                    if (event.target === device) {
+                        isDeviceConnected = false;
+                        log('⚠️ Device disconnected', currentStep);
+                        updateButtons();
+                    }
+                };
+                navigator.serial.addEventListener('disconnect', handleDisconnect);
+                
+                transport = new Transport(device, true);
+                
+                esploader = new ESPLoader({
+                    transport: transport,
+                    baudrate: CONFIG.BAUD_RATE,
+                    terminal: {
+                        clean: () => {},
+                        writeLine: (data) => log(data, 1),
+                        write: (data) => log(data, 1)
+                    }
+                });
+                
+                log('📡 Connecting to device...', 1);
+                await esploader.main();
+                
+                const chipName = await esploader.chip.CHIP_NAME;
+                const features = await esploader.chip.CHIP_FEATURES;
+                const mac = await esploader.chip.MAC_ADDR;
+                
+                chipInfo = { chipName, features, mac };
+                isDeviceConnected = true;
+                
+                log(`✅ Connected to ${chipName}`, 1);
+                log(`📍 MAC: ${mac}`, 1);
+                log(`🎯 Features: ${features}`, 1);
+                
+                // Update Step 2 chip info and show the box
+                document.getElementById('detectedChip').textContent = chipName;
+                document.getElementById('macAddress').textContent = mac;
+                document.getElementById('chipFeatures').textContent = features;
+                document.getElementById('chipInfoBox').style.display = 'block';
+                
+                return true;
+            } catch (error) {
+                log(`❌ Connection failed: ${error.message}`, 1);
+                isDeviceConnected = false;
+                
+                if (error.message.toLowerCase().includes('boot mode') || 
+                    error.message.toLowerCase().includes('timeout')) {
+                    log('', 1);
+                    log('⚠️  Make sure device is in BOOT MODE!', 1);
+                    log('See animation above for instructions.', 1);
+                }
+                
+                return false;
+            }
+        };
+
+        // ==================== FLASHING ====================
+        
+        const flashFirmware = async () => {
+            try {
+                const config = FIRMWARE_CONFIGS[selectedFirmware];
+                
+                document.getElementById('flashStatus').textContent = 'Loading firmware files...';
+                log('📦 Loading firmware files...', 3);
+                
+                const fileArray = [];
+                let firmwareBin = null;
+                
+                for (let i = 0; i < config.files.length; i++) {
+                    const file = config.files[i];
+                    const fileName = file.path.split('/').pop();
+                    
+                    log(`📄 Loading ${fileName}...`, 3);
+                    const binaryString = await loadFirmware(file.path);
+                    const isFirmwareBin = file.path.endsWith('firmware.bin');
+                    
+                    if (isFirmwareBin && config.variables?.length) {
+                        firmwareBin = { binaryString, offset: file.offset };
+                    } else {
+                        fileArray.push({ data: binaryString, address: file.offset });
+                    }
+                    
+                    log(`✓ Loaded ${fileName} (${binaryString.length} bytes)`, 3);
+                }
+
+                if (firmwareBin) {
+                    log('⚙️  Applying configuration...', 3);
+                    const modified = await replaceVariables(firmwareBin.binaryString, config.variables);
+                    fileArray.push({ data: modified, address: firmwareBin.offset });
+                }
+
+                document.getElementById('flashStatus').textContent = 'Flashing device...';
+                log('🔥 Starting flash operation...', 3);
+                
+                const totalBytes = fileArray.reduce((sum, file) => sum + file.data.length, 0);
+                
+                await esploader.writeFlash({
+                    fileArray,
+                    flashSize: "keep",
+                    eraseAll: false,
+                    compress: true,
+                    reportProgress: (fileIndex, written, total) => {
+                        const completedBytes = fileArray.slice(0, fileIndex).reduce((sum, file) => sum + file.data.length, 0);
+                        const totalWritten = completedBytes + written;
+                        const percentage = Math.round((totalWritten / totalBytes) * 100);
+                        
+                        document.getElementById('flashProgress').style.width = percentage + '%';
+                        document.getElementById('flashProgressText').textContent = percentage + '%';
+                        document.getElementById('flashStatus').textContent = `Flashing... ${percentage}%`;
+                    }
+                });
+                
+                log('✅ Flash complete!', 3);
+                document.getElementById('flashStatus').textContent = 'Flash complete! Resetting device...';
+                
+                // Show reset instructions
+                document.getElementById('resetInstructions').style.display = 'block';
+                document.getElementById('flashStatus').textContent = 'Flash complete - press RESET to continue';
+                
+                // Wait for device disconnect (happens when user presses RESET)
+                const waitForDisconnect = new Promise((resolve) => {
+                    const handleDisconnect = (event) => {
+                        if (event.target === device) {
+                            navigator.serial.removeEventListener('disconnect', handleDisconnect);
+                            resolve();
+                        }
+                    };
+                    navigator.serial.addEventListener('disconnect', handleDisconnect);
+                    
+                    // Also set a timeout as fallback
+                    setTimeout(() => {
+                        navigator.serial.removeEventListener('disconnect', handleDisconnect);
+                        resolve();
+                    }, 60000); // 60 second timeout
+                });
+                
+                await waitForDisconnect;
+                log('✓ Device reset detected', 3);
+                
+                
+                // Collect actual configuration values for replacement
+                const configValues = {};
+                if (config.variables?.length) {
+                    config.variables.forEach(variable => {
+                        const input = document.querySelector(`[data-firmware-name="${variable.firmware_name}"]`);
+                        if (input) {
+                            configValues[variable.firmware_name] = input.value;
+                        }
+                    });
+                }
+                
+                // Show expected behavior with actual values substituted
+                const expectedList = document.getElementById('expectedBehaviorList');
+                expectedList.innerHTML = config.expectedBehavior
+                    .map(item => {
+                        let processedItem = item;
+                        
+                        // Replace all variable placeholders with actual values
+                        if (config.variables?.length) {
+                            config.variables.forEach(variable => {
+                                const actualValue = configValues[variable.firmware_name] || variable.default_value;
+                                const isPassword = variable.readable_name.toLowerCase().includes('password');
+                                
+                                // If it's a password and hidePassword is enabled, wrap in blur span
+                                let replacementValue = actualValue;
+                                if (hidePassword && isPassword) {
+                                    replacementValue = `<span style="filter: blur(4px); user-select: none;">${actualValue}</span>`;
+                                }
+                                
+                                // Use global regex to replace all occurrences
+                                const regex = new RegExp(variable.firmware_name.replace(/[|*]/g, '\\$&'), 'g');
+                                processedItem = processedItem.replace(regex, replacementValue);
+                            });
+                        }
+                        
+                        return `<li>${processedItem}</li>`;
+                    })
+                    .join('');
+                
+                // Show configuration summary if there were variables
+                if (config.variables?.length) {
+                    const summaryContent = document.getElementById('configSummaryContent');
+                    let summaryHtml = '';
+                    
+                    config.variables.forEach(variable => {
+                        const input = document.querySelector(`[data-firmware-name="${variable.firmware_name}"]`);
+                        if (input) {
+                            const value = input.value;
+                            const displayValue = variable.postfix ? `${value}${variable.postfix}` : value;
+                            const isPassword = variable.readable_name.toLowerCase().includes('password');
+                            const valueStyle = (hidePassword && isPassword) ? 'style="filter: blur(4px); user-select: none;"' : '';
+                            const labelStyle = (hidePassword && isPassword) ? 'style="filter: blur(4px); user-select: none;"' : '';
+                            
+                            summaryHtml += `
+                                <div class="chip-info-row">
+                                    <span class="chip-info-label" ${labelStyle}>${variable.readable_name}:</span>
+                                    <span class="chip-info-value" ${valueStyle}>${displayValue}</span>
+                                </div>`;
+                        }
+                    });
+                    
+                    summaryContent.innerHTML = summaryHtml;
+                    document.getElementById('configSummary').style.display = 'block';
+                }
+                
+                // Move to final step
+                setTimeout(() => {
+                    currentStep = 4;
+                    updateStepIndicators();
+                    updateButtons();
+                    log('🎉 Flash wizard completed successfully!', 4);
+                    log(`📱 Firmware: ${config.name}`, 4);
+                    if (chipInfo.mac) {
+                        log(`📍 Device MAC: ${chipInfo.mac}`, 4);
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                log(`❌ Flash failed: ${error.message}`, 3);
+                document.getElementById('flashStatus').textContent = `Error: ${error.message}`;
+                document.getElementById('flashProgress').style.width = '0%';
+                
+                if (error.message.toLowerCase().includes('timeout') || 
+                    error.message.toLowerCase().includes('boot mode')) {
+                    log('', 3);
+                    log('⚠️  Device may not be in boot mode!', 3);
+                    log('Please reconnect in boot mode and try again.', 3);
+                }
+            }
+        };
+
+        // ==================== EVENT HANDLERS ====================
+        
+        // Event handlers for animations removed - using video files instead
+
+        document.getElementById('nextBtn').addEventListener('click', async () => {
+            if (currentStep === 1) {
+                // Connect or reconnect device
+                const nextBtn = document.getElementById('nextBtn');
+                nextBtn.disabled = true;
+                nextBtn.textContent = 'Connecting...';
+                
+                const success = await connectDevice();
+                
+                if (success) {
+                    currentStep = 2;
+                    updateStepIndicators();
+                    updateButtons();
+                } else {
+                    nextBtn.disabled = false;
+                    nextBtn.textContent = 'Retry Connection';
+                }
+            } else if (currentStep === 2) {
+                // Start flashing
+                currentStep = 3;
+                updateStepIndicators();
+                updateButtons();
+                
+                // Start flash immediately
+                await flashFirmware();
+            } else if (currentStep === 4) {
+                // Start over
+                location.reload();
+            }
+        });
+
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (currentStep > 1) {
+                currentStep--;
+                
+                // If going back to step 1, reset the next button to allow reconnection
+                if (currentStep === 1) {
+                    const nextBtn = document.getElementById('nextBtn');
+                    if (!isDeviceConnected) {
+                        nextBtn.textContent = 'Connect Device';
+                        nextBtn.disabled = false;
+                    } else {
+                        nextBtn.textContent = 'Reconnect Device';
+                        nextBtn.disabled = false;
+                    }
+                }
+                
+                // If going back to step 2, ensure firmware selection is maintained
+                if (currentStep === 2 && selectedFirmware) {
+                    const nextBtn = document.getElementById('nextBtn');
+                    nextBtn.textContent = 'Flash Firmware';
+                    nextBtn.disabled = false;
+                }
+                
+                updateStepIndicators();
+                updateButtons();
+            }
+        });
+
+        // ==================== INITIALIZATION ====================
+
+        // Loads a manifest.json served alongside this page and merges its firmware
+        // entries into FIRMWARE_CONFIGS - see the matching function in index.html for
+        // the full explanation. A repo with no manifest.json behaves exactly as before.
+        const loadManifest = async () => {
+            try {
+                const response = await fetch('./manifest.json');
+                if (!response.ok) return;
+                const manifest = await response.json();
+                Object.assign(FIRMWARE_CONFIGS, manifest);
+            } catch (e) {
+                // No manifest.json here, or it didn't parse - not an error.
+            }
+        };
+
+        window.addEventListener('load', async () => {
+            if (!('serial' in navigator)) {
+                log('❌ Web Serial API not supported', 1);
+                log('Please use Chrome, Edge, or Opera browser', 1);
+                document.getElementById('nextBtn').disabled = true;
+            } else {
+                log('✅ Web Serial API ready', 1);
+                log('Click "Connect Device" when your device is in boot mode', 1);
+            }
+
+            await loadManifest();
+
+            renderFirmwareList();
+            updateButtons();
+        });
+    </script>
+</body>
+</html>
