@@ -26,7 +26,7 @@ changed for a LEGO hub example by Geert Roumen
 @Hardware
 https://www.analoglamb.com/product/esp32-development-board/
 @library
-https://github.com/lemio/esp32_ble_wedo
+https://github.com/lemio/esp32_PoweredUp
 @Status
 Working
 @licence

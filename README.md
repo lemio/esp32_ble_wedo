@@ -230,7 +230,7 @@ See [`examples/analog_throttle`](examples/analog_throttle) for the full sketch a
 
 Don't want to install PlatformIO just to try an example? Every example above is also
 built automatically and published as ready-to-flash firmware at
-**[lemio.github.io/esp32_ble_wedo](https://lemio.github.io/esp32_ble_wedo/)** - open it
+**[lemio.github.io/esp32_PoweredUp](https://lemio.github.io/esp32_PoweredUp/)** - open it
 in Chrome or Edge (Web Serial support required), pick an example, plug in your ESP32
 over USB, and flash it directly from the browser using
 [ESP32-S3-Flasher](https://github.com/lemio/ESP32-S3-Flasher). `wifi_control.ino`'s page
