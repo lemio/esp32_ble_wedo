@@ -56,7 +56,7 @@ void loop() {
 }
 ```
 
-<!-- TODO: record and embed a demo video here, showing a hand moving toward/away from the sensor alongside the LED colour and motor speed changing -->
+https://github.com/user-attachments/assets/2bf333ff-1557-4f30-bbb0-2b545ad304cf
 
 See [`examples/sensor_motor`](examples/sensor_motor) for the full sketch.
 
