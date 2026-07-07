@@ -12,6 +12,14 @@
 # default value itself (e.g. MDNS_HOST's "esp-poweredup" below - both the compiled
 # default AND the flasher's search key, so a board flashed without ever touching the
 # browser flasher still gets a working hostname). See examples/wifi_control/wifi_control.ino.
+#
+# `site:` (optional, alongside `examples:`) renames the flasher tool itself instead of
+# leaving it as the generic "ESP32-S3 Web Flasher"/"ESP32-S3 Flash Wizard" - see
+# ESP32-S3-Flasher's README.md, "Site-wide branding" section, for the full field list.
+
+site:
+  title: Powered Up BLE Library Flasher
+  subtitle: Flash any esp32_PoweredUp example straight from your browser - no PlatformIO needed
 
 examples:
   button_motor:
