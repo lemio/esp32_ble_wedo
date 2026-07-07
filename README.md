@@ -227,7 +227,7 @@ Add to your `platformio.ini`:
 ```ini
 lib_deps = 
     h2zero/NimBLE-Arduino @ ^1.4.0
-    lemio/esp32_ble_wedo @ ^3.0.0
+    lemio/esp32_PoweredUp
 ```
 
 ## API Reference
