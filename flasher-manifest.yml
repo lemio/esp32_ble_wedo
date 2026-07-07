@@ -1,0 +1,65 @@
+# Per-example metadata for the ESP32-S3-Flasher repo's reusable build/publish Action
+# (https://github.com/lemio/ESP32-S3-Flasher). The Action builds each `env:` from
+# platformio.ini, then merges each example's `name`/`description`/`variables` here into
+# the generated manifest.json alongside the compiled binaries - this file is the only
+# thing that can't be inferred from the PlatformIO build itself (display text, and which
+# examples expose flash-time-patchable placeholder variables).
+#
+# `variables[].firmware_name` must match the exact string the example's source reserves
+# as a fixed-size array (e.g. `const char WIFI_SSID[100] = "|*S*|";`) - it's the literal
+# text the flasher searches for in the compiled binary, so it works whether that's an
+# obvious placeholder (no sensible default, e.g. WiFi SSID/password) or a real usable
+# default value itself (e.g. MDNS_HOST's "esp-poweredup" below - both the compiled
+# default AND the flasher's search key, so a board flashed without ever touching the
+# browser flasher still gets a working hostname). See examples/wifi_control/wifi_control.ino.
+
+examples:
+  button_motor:
+    name: button_motor.ino
+    description: >-
+      Drive a motor with the ESP32's own built-in button - a good starting point for
+      building a physical remote for a LEGO creation.
+
+  sensor_motor:
+    name: sensor_motor.ino
+    description: >-
+      A motor and LED driven by a distance/detect sensor's reading - moving your hand
+      closer or further changes both at once.
+
+  train_hub:
+    name: train_hub.ino
+    description: >-
+      Standalone Powered Up/train hub demo - drives the motor back and forth, LED
+      colour indicates direction, prints tilt sensor readings if one's attached.
+
+  train_remote:
+    name: train_remote.ino
+    description: >-
+      A Powered Up Remote Control drives a train hub with key-repeat speed steps, a
+      synced LED colour, and a NeoPixel speed gauge.
+
+  wifi_control:
+    name: wifi_control.ino
+    description: >-
+      No physical controls - drive the motor from a web page styled like the physical
+      remote, served by the ESP32 itself over WiFi.
+    variables:
+      - firmware_name: "|*S*|"
+        readable_name: WiFi Name (SSID)
+        default_value: ""
+        max_length: 100
+      - firmware_name: "|*P*|"
+        readable_name: WiFi Password
+        default_value: ""
+        max_length: 100
+      - firmware_name: esp-poweredup
+        readable_name: mDNS Hostname
+        default_value: esp-poweredup
+        postfix: .local
+        max_length: 100
+
+  analog_throttle:
+    name: analog_throttle.ino
+    description: >-
+      A breadboard potentiometer wired to the ESP32 acts as a physical throttle for a
+      real LEGO train - turn to speed up/reverse, centre to stop.

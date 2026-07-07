@@ -1,0 +1,43 @@
+name: Build & publish flasher site
+
+# Builds every example (platformio.ini) and packages the binaries + a browser flashing
+# UI into docs/, using the reusable Action from lemio/ESP32-S3-Flasher - see that repo's
+# action/action.yml for what it does. Publishing docs/ itself (GitHub Pages source =
+# docs/ on main) is a one-time manual setting in this repo's Settings > Pages.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'examples/**'
+      - 'PoweredUp.h'
+      - 'PoweredUp.cpp'
+      - 'ble_functions.h'
+      - 'ble_functions.cpp'
+      - 'wedo_color_definitions.h'
+      - 'platformio.ini'
+      - 'flasher-manifest.yml'
+      - '.github/workflows/build-and-publish-flasher.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: lemio/ESP32-S3-Flasher/action@main
+        with:
+          output-dir: docs
+
+      - name: Commit and push docs/
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs
+          git diff --cached --quiet && echo "No changes to publish" && exit 0
+          git commit -m "Publish flasher site"
+          git push

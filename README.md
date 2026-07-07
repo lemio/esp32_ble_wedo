@@ -26,7 +26,6 @@ void loop() {
 }
 ```
 
-
 https://github.com/user-attachments/assets/e2af3bfe-5ca0-48af-92df-ad1df9a39a3a
 
 See [`examples/button_motor`](examples/button_motor) for the full sketch.
@@ -131,33 +130,61 @@ See [`examples/train_remote`](examples/train_remote) for the full sketch (colour
 
 ## wifi_control.ino — driving a motor from a web page instead of BLE input
 
-No physical controls at all - the ESP32 joins your WiFi network and serves a tiny web
-page with forward/stop/backward links, driving whichever motor is plugged into the hub
-based on which link you click.
+No physical controls at all - the ESP32 joins your WiFi network and serves a page styled
+like the physical LEGO Powered Up Remote Control: a grey "+" on top drives the motor
+forward, a red STOP in the middle stops it, a grey "-" on the bottom drives it backward.
+Big, centred buttons that highlight while pressed (mouse or touch), firing each command
+in the background with `fetch()` so the page never reloads. Also starts an mDNS
+responder, so the page is reachable at `http://esp-poweredup.local/` out of the box -
+even flashed straight from `pio run --target upload` with no other setup - instead of
+having to look up its IP address.
+
+The WiFi SSID/password are fixed-size placeholder strings (`|*S*|`, `|*P*|`) rather than
+plain literals - there's no sensible default for "your WiFi," so if you're flashing a
+prebuilt binary via a browser tool like [ESP32-S3-Flasher](https://github.com/lemio/ESP32-S3-Flasher),
+these get patched with your real values at flash time, no recompiling needed. Building
+from source yourself instead? Just replace the placeholder strings directly. The mDNS
+hostname works differently: its compiled-in default is already a real, usable value
+(`esp-poweredup`) - the flasher can still search-and-replace it for a different name if
+you're running more than one board on the same network, but you don't have to.
 
 ```cpp
 #include <PoweredUp.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
 
 PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);
 WiFiServer server(80);
 
+// WIFI_SSID/WIFI_PASSWORD: patched at flash time by a browser flashing tool, or replace
+// directly if building from source - no sensible default for "your WiFi" exists.
+const char WIFI_SSID[100]     = "|*S*|";
+const char WIFI_PASSWORD[100] = "|*P*|";
+// MDNS_HOST: a real, usable default - works even without ever touching a flashing tool.
+const char MDNS_HOST[100]     = "esp-poweredup";
+
 void setup() {
-  WiFi.begin("yourNetworkName", "yourPassword");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED) delay(500);
+  MDNS.begin(MDNS_HOST);            // reachable at http://esp-poweredup.local/
+  MDNS.addService("http", "tcp", 80);
   server.begin();
   hub.connect();
 }
 
 void loop() {
   hub.handleConnection();
-  // serves a page with /F, /S, /B links -> hub.writeMotor(1, 100/0/-100)
+  // serves the remote-control page at "/", and GET /F, /S, /B -> hub.writeMotor(1, 100/0/-100)
 }
 ```
 
-https://github.com/user-attachments/assets/40f05ed4-cb06-491f-b153-1688b787da90
+<!-- TODO: record and embed a demo video here, showing the new remote-control-style buttons
+     (grey +/- and red STOP) and the motor responding to each press. The previous demo
+     video (user-attachments/assets/40f05ed4-...) showed the old link-based UI, since
+     replaced by the button UI above - needs a fresh recording, not the old link. -->
 
-See [`examples/wifi_control`](examples/wifi_control) for the full sketch.
+See [`examples/wifi_control`](examples/wifi_control) for the full sketch, or flash it
+straight from your browser (no PlatformIO needed) - see [Flashing prebuilt firmware](#flashing-prebuilt-firmware) below.
 
 ## analog_throttle.ino — a breadboard knob driving a real LEGO train
 
@@ -199,6 +226,16 @@ https://github.com/user-attachments/assets/2882283a-fe08-4eb5-a36b-bcaa7341feb5
 
 See [`examples/analog_throttle`](examples/analog_throttle) for the full sketch and wiring notes.
 
+## Flashing prebuilt firmware
+
+Don't want to install PlatformIO just to try an example? Every example above is also
+built automatically and published as ready-to-flash firmware at
+**[lemio.github.io/esp32_ble_wedo](https://lemio.github.io/esp32_ble_wedo/)** - open it
+in Chrome or Edge (Web Serial support required), pick an example, plug in your ESP32
+over USB, and flash it directly from the browser using
+[ESP32-S3-Flasher](https://github.com/lemio/ESP32-S3-Flasher). `wifi_control.ino`'s page
+lets you fill in your WiFi SSID/password/mDNS hostname there too - they get patched into
+the firmware at flash time, no recompiling needed.
 
 ## Version 3.0.0 - the `PoweredUp` class 🎉
 
@@ -226,7 +263,7 @@ library figures out which protocol it's using for you. It's still built on the m
 Add to your `platformio.ini`:
 ```ini
 lib_deps = 
-    h2zero/NimBLE-Arduino @ ^1.4.0
+    h2zero/NimBLE-Arduino
     lemio/esp32_PoweredUp
 ```
 
