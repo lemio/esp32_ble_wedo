@@ -22,7 +22,7 @@
 ported for sparkfun esp32
 31.01.2017 by Jan Hendrik Berlin
 
-changed fot the lego WEDO2.0 exmaple by Geert Roumen
+changed for a LEGO hub example by Geert Roumen
 
 @Hardware
 https://www.analoglamb.com/product/esp32-development-board/
@@ -33,9 +33,9 @@ Working (but probably sub-optimal/stable)
 @licence
 https://creativecommons.org/licenses/by-sa/4.0/
 
-if you look in front of the WEDO ports,
-so the back of the wedo, on port 1 there
-is a LEGO wedo2.0 motor connected
+if you look in front of the hub's ports,
+so the back of the hub, on port 1 there
+is a LEGO motor connected
  _________________
 |  port2 | port1  |
 |________|________|
@@ -47,7 +47,9 @@ is a LEGO wedo2.0 motor connected
 #include <PoweredUp.h>
 
 #include <WiFi.h>
-PoweredUp myWedo;
+// DEVICE_TYPE_ANY_HUB connects to any supported LEGO hub, but never a Remote Control -
+// so this can't accidentally connect to a nearby remote instead of an actual hub.
+PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);
 
 const char* ssid     = "yourNetworkName";
 const char* password = "yourPassword";
@@ -81,8 +83,8 @@ void setup()
 
     server.begin();
 
-    myWedo.connect();
-    while (!myWedo.connected()){
+    hub.connect();
+    while (!hub.connected()){
     Serial.print(".");
     delay(100);
     }
@@ -91,7 +93,7 @@ void setup()
 
 void loop(){
   // Handle automatic reconnection if connection is lost
-  myWedo.handleConnection();
+  hub.handleConnection();
 
  WiFiClient client = server.available();   // listen for incoming clients
 
@@ -130,13 +132,13 @@ void loop(){
 
         // Check to see if the client request was "GET /F", "GET /S", or "GET /B":
         if (currentLine.endsWith("GET /F")) {
-          myWedo.writeMotor(1,100);      // GET /F drives the motor forward
+          hub.writeMotor(1,100);      // GET /F drives the motor forward
         }
         if (currentLine.endsWith("GET /S")) {
-          myWedo.writeMotor(1,0);        // GET /S stops the motor
+          hub.writeMotor(1,0);        // GET /S stops the motor
         }
         if (currentLine.endsWith("GET /B")) {
-          myWedo.writeMotor(1,-100);     // GET /B drives the motor backwards
+          hub.writeMotor(1,-100);     // GET /B drives the motor backwards
         }
       }
     }

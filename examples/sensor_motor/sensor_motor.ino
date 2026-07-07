@@ -6,46 +6,33 @@ https://www.analoglamb.com/product/esp32-development-board/
 @library
 https://github.com/lemio/esp32_ble_wedo
 @Status
-Working (but probably sub-optimal/stable)
+Working
 @licence
 https://creativecommons.org/licenses/by-sa/4.0/
 
-if you look in front of the WEDO ports,
-so the back of the wedo, on port 1 there
-is a LEGO wedo2.0 motor connected
-at port 2 there should be a infrared
-detect sensor
- _________________
-|  port2 | port1  |
-|________|________|
-|                 |
-|                 |
-|_________________|
+A motor and a detect (infrared distance) sensor plugged into a LEGO hub (WeDo 2.0,
+Powered Up, BOOST, train, Duplo), either way round - onDistanceChanged() with no port
+given finds the sensor itself, wherever it's plugged in.
 */
 
 #include <PoweredUp.h>
 
-//Make myWedo object
-PoweredUp myHub;
-//Add a global variable detectSensorValue
+// Connect to any LEGO hub (WeDo 2.0, Powered Up, BOOST, train, Duplo) - the first one found.
+PoweredUp myHub(nullptr, DEVICE_TYPE_ANY_HUB);
 int detectSensorValue = 0;
-//Make the handleInput function (try to avoid using wedo
-//functions in this one) and keep it short
-void handleInput(int8_t* value,int size){
-    detectSensorValue = value[0];
-  }
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(115200);
   myHub.connect();
-  //Wait untill the wedo is connected to the ESP32
   while (!myHub.connected()){
     Serial.print(".");
     delay(100);
     }
     delay(3000);
-    myHub.monitorDistance(2,handleInput);
+    // No port given - finds the distance sensor itself, whichever port it's plugged into.
+    myHub.onDistanceChanged([](int8_t distance){
+      detectSensorValue = distance;
+    });
 }
 
 
@@ -54,9 +41,11 @@ void loop() {
   myHub.handleConnection();
 
   delay(100);
-  // detectSensorValue is already 0-10, the same range as the LEGO_COLOR_* indices, so
-  // it maps directly onto the LED colour with no scaling needed.
+  // detectSensorValue is 0-10 on both WeDo 2.0 and Powered Up/BOOST hubs, matching the
+  // LEGO_COLOR_* index range directly.
   myHub.writeIndexColor(detectSensorValue);
   delay(100);
-  myHub.writeMotor(1,100-detectSensorValue);
+  // No port given - finds the motor itself, whichever port it's plugged into. Scaled up
+  // to the full -100..100 motor range since detectSensorValue only goes 0-10.
+  myHub.writeMotor(100 - detectSensorValue * 10);
 }

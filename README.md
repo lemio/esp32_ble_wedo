@@ -1,10 +1,160 @@
-# esp32_ble_wedo
-A library to control LEGO wedo with the ESP32 through Bluetooth low energy
+# Powered Up BLE library for ESP32
+A library to control LEGO Powered Up, BOOST, train, Duplo, and WeDo 2.0 hubs (plus the
+Powered Up Remote Control) from an ESP32 over Bluetooth low energy.
 
-## The button_motor.ino example:
+## button_motor.ino — a physical remote using the ESP32's own button
 
+The simplest possible example: hold the ESP32's built-in button (pin 0) and whichever
+motor is plugged into the hub runs, with the hub's LED turning green while held and red
+when released. A good starting point if you want to build your own physical remote for
+a LEGO creation.
+
+```cpp
+#include <PoweredUp.h>
+
+PoweredUp myHub(nullptr, DEVICE_TYPE_ANY_HUB);
+
+void setup() {
+  myHub.connect();
+}
+
+void loop() {
+  myHub.handleConnection();
+  bool pressed = !digitalRead(0); // built-in button is active-low
+  myHub.writeIndexColor(pressed ? LEGO_COLOR_GREEN : LEGO_COLOR_RED);
+  myHub.writeMotor(pressed * 100);
+}
+```
 
 https://github.com/user-attachments/assets/92703554-2661-43a6-8563-1c84ce84e086
+
+See [`examples/button_motor`](examples/button_motor) for the full sketch.
+
+## sensor_motor.ino — a motor and LED driven by a distance sensor
+
+A motor and a WeDo 2.0 detect (infrared distance) sensor plugged into the same hub, in
+either port - the sensor's reading drives both the motor's speed and the hub's LED
+colour, so moving your hand closer/further changes both at once. `onDistanceChanged()`
+with no port given finds the sensor itself, wherever it's plugged in.
+
+```cpp
+#include <PoweredUp.h>
+
+PoweredUp myHub(nullptr, DEVICE_TYPE_ANY_HUB);
+int detectSensorValue = 0;
+
+void setup() {
+  myHub.connect();
+  myHub.onDistanceChanged([](int8_t distance){ detectSensorValue = distance; });
+}
+
+void loop() {
+  myHub.handleConnection();
+  myHub.writeIndexColor(detectSensorValue);            // 0-10, matches the LEGO_COLOR_* index range directly
+  myHub.writeMotor(100 - detectSensorValue * 10);       // scaled up to the full -100..100 motor range
+}
+```
+
+<!-- TODO: record and embed a demo video here, showing a hand moving toward/away from the sensor alongside the LED colour and motor speed changing -->
+
+See [`examples/sensor_motor`](examples/sensor_motor) for the full sketch.
+
+## train_hub.ino — a standalone train hub demo, no remote needed
+
+Drives whichever motor is plugged into a Powered Up train hub back and forth, lighting
+the hub's LED green while going forward and red while going backward. If a tilt sensor
+is plugged in too, its x/y angle is printed to Serial.
+
+```cpp
+#include <PoweredUp.h>
+
+PoweredUp hub(nullptr, DEVICE_TYPE_POWERED_UP_HUB);
+
+void setup() {
+  Serial.begin(115200);
+  hub.connect();
+  hub.onTiltChanged([](int8_t x, int8_t y){
+    Serial.printf("Tilt angle: x=%d y=%d\n", x, y);
+  });
+}
+
+void loop() {
+  hub.handleConnection();
+  hub.writeRGB(0, 255, 0); hub.writeMotor(60);  delay(2000); // forward, green
+  hub.writeRGB(255, 0, 0); hub.writeMotor(-60); delay(2000); // backward, red
+}
+```
+
+<!-- TODO: record and embed a demo video here, showing the train hub driving forward/backward with the LED colour change, plus Serial output if a tilt sensor is attached -->
+
+See [`examples/train_hub`](examples/train_hub) for the full sketch.
+
+## train_remote.ino — a Remote Control driving a train hub, with a speed gauge
+
+A LEGO Powered Up Remote Control drives a real train hub: the remote's up/down buttons
+step the speed by 10% and repeat while held (like a keyboard key), the stop button halts
+immediately and takes priority over up/down, and the hub's own button cycles through the
+built-in LEGO colours on both the hub's and remote's LEDs at once. A 5-pixel NeoPixel
+strip mirrors the current speed and colour as a lit bar.
+
+```cpp
+#include <PoweredUp.h>
+
+PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);
+PoweredUp remote(nullptr, DEVICE_TYPE_POWERED_UP_REMOTE);
+int trainSpeed = 0;
+
+void setup() {
+  hub.connect();
+  remote.connect();
+
+  RemoteButtonHandle& btn = remote.remoteButton('A');
+  btn.up.onPressed([](){ trainSpeed += 10; hub.writeMotor(trainSpeed); }, 200); // repeats every 200ms while held
+  btn.down.onPressed([](){ trainSpeed -= 10; hub.writeMotor(trainSpeed); }, 200);
+  btn.stop.onPressed([](){ trainSpeed = 0; hub.writeMotor(0); });
+
+  hub.onButtonPressed([](){ /* cycle colourIndex, write it to both hub and remote */ });
+}
+
+void loop() {
+  hub.handleConnection();
+  remote.handleConnection();
+}
+```
+
+<!-- TODO: record and embed a demo video here, showing the remote's up/down/stop buttons driving the train's speed, the synced LED colours, and the NeoPixel speed gauge -->
+
+See [`examples/train_remote`](examples/train_remote) for the full sketch (colour gauge, direction light, and NeoPixel wiring notes included).
+
+## wifi_control.ino — driving a motor from a web page instead of BLE input
+
+No physical controls at all - the ESP32 joins your WiFi network and serves a tiny web
+page with forward/stop/backward links, driving whichever motor is plugged into the hub
+based on which link you click.
+
+```cpp
+#include <PoweredUp.h>
+#include <WiFi.h>
+
+PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);
+WiFiServer server(80);
+
+void setup() {
+  WiFi.begin("yourNetworkName", "yourPassword");
+  while (WiFi.status() != WL_CONNECTED) delay(500);
+  server.begin();
+  hub.connect();
+}
+
+void loop() {
+  hub.handleConnection();
+  // serves a page with /F, /S, /B links -> hub.writeMotor(1, 100/0/-100)
+}
+```
+
+<!-- TODO: record and embed a demo video here, showing the served web page and the motor responding to each link click -->
+
+See [`examples/wifi_control`](examples/wifi_control) for the full sketch.
 
 ## analog_throttle.ino — a breadboard knob driving a real LEGO train
 
@@ -20,18 +170,18 @@ motor command in about 10 lines of code:
 
 #define POT_PIN 8  // potentiometer wiper - outer legs to 3.3V and GND
 
-PoweredUp hub; // connects to any supported LEGO hub - WeDo 2.0, Powered Up, BOOST, train hub
+// DEVICE_TYPE_ANY_HUB connects to any supported LEGO hub - WeDo 2.0, Powered Up, BOOST,
+// train, Duplo - but never a Remote Control, so this can't accidentally connect to a
+// nearby remote instead of an actual hub.
+PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);
 int colorIndex = 1;
-
-void hubButtonAction(int8_t* value, int size) {
-  if (size < 1 || value[0] != 1) return;
-  colorIndex = (colorIndex % 9) + 1;
-  hub.writeIndexColor(colorIndex); // pressing the hub's own button cycles its LED
-}
 
 void setup() {
   hub.connect();
-  hub.monitorHubButton(hubButtonAction);
+  hub.onButtonPressed([](){
+    colorIndex = (colorIndex % 9) + 1;
+    hub.writeIndexColor(colorIndex); // pressing the hub's own button cycles its LED
+  });
 }
 
 void loop() {
@@ -53,7 +203,7 @@ This library was rewritten around a new `PoweredUp` class that replaces the old 
 class - **this is a breaking change**, not a drop-in upgrade. Make one `PoweredUp`
 object per LEGO device you want to talk to (a hub, a Remote Control, ...) - you can have
 more than one connected to the same ESP32 at the same time. The same methods
-(`writeMotor()`, `writeIndexColor()`, `monitorDistance()`, ...) work the same way
+(`writeMotor()`, `writeIndexColor()`, `onDistanceChanged()`, ...) work the same way
 whether you're talking to a WeDo 2.0 hub or a Powered Up / BOOST / train hub - the
 library figures out which protocol it's using for you. It's still built on the modern
 **NimBLE-Arduino** library for performance, stability, and low memory usage.
@@ -141,35 +291,77 @@ matching device is attached (e.g. two motors on one hub).
 #define LEGO_COLOR_WHITE 10
 </pre>
 
-### Sensors
+### Buttons & sensors
 
-Work on both WeDo 2.0 hubs and Powered Up / BOOST / train hubs:
+Callbacks are lambdas, not raw byte arrays - `[](){ ... }` for a button,
+`[](int8_t x, int8_t y){ ... }` for a tilt sensor, etc. Since they're `std::function`,
+they can capture variables (`[&colorIndex](){ ... }`), unlike a plain C function pointer.
 
 ```cpp
-void monitorButton(inputHandlerFunction callback);                  // Remote Control buttons: value[0]=up, value[1]=stop, value[2]=down
-void monitorButton(int port, inputHandlerFunction callback);
-void monitorDistance(inputHandlerFunction callback);                 // a distance/proximity sensor
-void monitorDistance(int port, inputHandlerFunction callback);
-void monitorTiltSensor(inputHandlerFunction callback);                // tilt angle, x/y degrees, -45 to 45
-void monitorTiltSensor(int port, inputHandlerFunction callback);
-void monitorHubButton(inputHandlerFunction callback);                  // the hub's own physical button
-void monitorInput(int port, inputHandlerFunction callback, uint8_t mode); // advanced: a specific mode yourself
-void stopMonitoring(int port);   // stop listening on one port
+void onButtonPressed(std::function<void()> callback);   // the hub's own physical button - no port, there's only one
+void onButtonReleased(std::function<void()> callback);
+
+void onDistanceChanged(std::function<void(int8_t distance)> callback);        // a distance/proximity sensor, auto-detected, 0-10
+void onTiltChanged(std::function<void(int8_t x, int8_t y)> callback);         // tilt angle, x/y degrees, -45 to 45, auto-detected
+```
+
+Both work on WeDo 2.0 hubs and Powered Up / BOOST / train hubs, and find the right
+device themselves. A WeDo 2.0 hub does report what's plugged into each port (via its
+port-type characteristic, the same way it reports attach/detach events), but if you
+call `onDistanceChanged()`/`onTiltChanged()` before that report has arrived - e.g.
+right after `connect()` - there's nothing to match against yet, so it assumes port A
+and corrects itself automatically once the real attach event comes in.
+
+For explicit port targeting instead of auto-detection, or to ask what's actually plugged
+into a port, use `port('A')` (or `1`, `2`, ...):
+
+```cpp
+hub.port('A').onDistanceChanged([](int8_t distance){ ... });
+hub.port('A').onTiltChanged([](int8_t x, int8_t y){ ... });
+
+if (hub.port('A') == IO_TYPE_MOTION_SENSOR) {
+  Serial.println("There's a motion sensor on port A");
+}
+```
+
+`port()`'s comparison checks the same attach-tracking the library already uses
+internally, so it's most reliable once `handleConnection()` has run for a bit after
+`connect()` - checked immediately in `setup()`, a device that's physically plugged in
+may not have reported its attach event yet.
+
+A Remote Control's three buttons (up/stop/down) are addressed the same way, one handle
+per port covering all three:
+
+```cpp
+RemoteButtonHandle& btn = remote.remoteButton('A'); // or remote.remoteButton() to auto-detect
+btn.up.onPressed([](){ ... });
+btn.up.onReleased([](){ ... });
+btn.down.onPressed([](){ ... }, 200); // optional repeatMs - keep firing every 200ms while held, like a keyboard key
+btn.stop.onPressed([](){ ... });      // stop takes priority: while held, up/down presses are suppressed
+```
+
+Advanced: `monitorInput(int port, RawInputHandler callback, uint8_t mode)` listens to a
+specific mode yourself, callback shaped `std::function<void(int8_t* value, int size)>` -
+see the `*Mode` enums in `PoweredUp.h`, or the "Port mode information" table the library
+prints to Serial whenever something attaches, for what modes a given device supports.
+Most people should use the methods above instead.
+
+```cpp
+void stopMonitoring(int port);   // stop listening on one port (including port()/remoteButton() handles targeting it)
 void stopMonitoring();           // stop all monitoring on this connection
 ```
 
-The no-port overloads find the right device themselves; on a WeDo 2.0 hub (which can't
-report what's plugged in on its own) this falls back to assuming port A unless told
-otherwise. `monitorInput()` is the general form the others are built on - see the
-`*Mode` enums in `PoweredUp.h`, or the "Port mode information" table the library prints
-to Serial whenever something attaches, for what modes a given device actually supports.
+**A lambda footgun to know about:** a callback that captures a local variable *by
+reference* will read freed memory if that local goes out of scope before the callback
+fires later - general to `std::function`/lambdas, not specific to this library. Capture
+by value, or use globals/member variables for anything a callback needs to persist.
 
 ### Advanced / escape hatches
 
 ```cpp
 void writeCommand(uint8_t* command, int size, int type = WEDO_OUTPUT); // send a raw command yourself
 void writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, uint8_t format); // WeDo 2.0 only
-void addNotificationHandler(void (*f)(uint8_t*, int)); // replaces the library's own notification handling with your own
+void addNotificationHandler(std::function<void(uint8_t*, int)> f); // replaces the library's own notification handling with your own
 ```
 
 Most sketches won't need these - `writeCommand()`'s `type` defaults to `WEDO_OUTPUT`
@@ -178,12 +370,13 @@ that need it.
 
 ## Examples
 
-* analog_throttle.ino (a breadboard potentiometer as a physical throttle for a real LEGO train - see above).
-* button_motor.ino (it let's you controll the motor with the build in button on the ESP). (Nice start if you want to make a remote for you WEDO creation)
-* sensor_motor.ino (drives a motor's speed and an LED colour from a distance/detect sensor's reading).
-* train_hub.ino (a simple standalone Powered Up / BOOST / train hub demo: motor, LED, tilt sensor).
-* train_remote.ino (a Remote Control driving a train hub - speed ramp with key-repeat, synced LED colours, a NeoPixel speed gauge).
-* wifi_control.ino (it let's you set the direction of the motor connected to the wedo, over a WiFi web page instead of BLE input).
+See each example's own section above for a description, code snippet, and demo video:
+[button_motor.ino](#button_motorino--a-physical-remote-using-the-esp32s-own-button),
+[sensor_motor.ino](#sensor_motorino--a-motor-and-led-driven-by-a-distance-sensor),
+[train_hub.ino](#train_hubino--a-standalone-train-hub-demo-no-remote-needed),
+[train_remote.ino](#train_remoteino--a-remote-control-driving-a-train-hub-with-a-speed-gauge),
+[wifi_control.ino](#wifi_controlino--driving-a-motor-from-a-web-page-instead-of-ble-input),
+[analog_throttle.ino](#analog_throttleino--a-breadboard-knob-driving-a-real-lego-train).
 
 ## Prior art
 

@@ -16,14 +16,6 @@ out what's actually attached to your hub.
 // sketch won't accidentally connect to a Remote Control if one happens to be nearby too.
 PoweredUp hub(nullptr, DEVICE_TYPE_POWERED_UP_HUB);
 
-void handleTilt(int8_t* value, int size) {
-  if (size < 2) return;
-  Serial.print("Tilt angle: x=");
-  Serial.print(value[0]);
-  Serial.print(" y=");
-  Serial.println(value[1]);
-}
-
 void setup() {
   Serial.begin(115200);
 
@@ -33,7 +25,12 @@ void setup() {
 
   // Only does anything if a tilt sensor is actually plugged in - finds it itself,
   // wherever it is.
-  hub.monitorTiltSensor(handleTilt);
+  hub.onTiltChanged([](int8_t x, int8_t y){
+    Serial.print("Tilt angle: x=");
+    Serial.print(x);
+    Serial.print(" y=");
+    Serial.println(y);
+  });
 }
 
 void loop() {

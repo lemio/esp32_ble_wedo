@@ -1,5 +1,6 @@
 /*
-Index colors for the RGB wedo2.0 LED
+Index colors for writeIndexColor() - works on both WeDo 2.0 and Powered Up/BOOST/train
+hub RGB LEDs.
 */
 
 #define LEGO_COLOR_BLACK 0

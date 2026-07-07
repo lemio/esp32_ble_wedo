@@ -10,8 +10,8 @@ Working
 @licence
 https://creativecommons.org/licenses/by-sa/4.0/
 
-Connect the motor to any port on the lego lwp3 hub
-and the button to pin 0 on the ESP32. 
+Connect the motor to any port on a LEGO hub (WeDo 2.0, Powered Up, BOOST, train, Duplo)
+and the button to pin 0 on the ESP32.
 
 When the button is pressed,
 the motor will run and the LED will turn green (red when released).
@@ -19,7 +19,9 @@ the motor will run and the LED will turn green (red when released).
 
 #include <PoweredUp.h>
 
-PoweredUp myHub;
+// DEVICE_TYPE_ANY_HUB connects to any supported LEGO hub, but never a Remote Control -
+// so this can't accidentally connect to a nearby remote instead of an actual hub.
+PoweredUp myHub(nullptr, DEVICE_TYPE_ANY_HUB);
 
 void setup() {
   // put your setup code here, to run once:

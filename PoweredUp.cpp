@@ -1,5 +1,9 @@
 #include "PoweredUp.h"
 
+// Forward-declared: defined near _monitorWedoDevice() below, used earlier by
+// handleConnection()'s WeDo reconnect-resend loop.
+static uint8_t _wedoRangeFormatFor(uint8_t deviceId);
+
 #define LWP_IMMEDIATE_NO_ACK 0x10
 #define LWP_PORT_OUTPUT_COMMAND 0x81
 #define LWP_WRITE_DIRECT_MODE_DATA 0x51
@@ -106,26 +110,72 @@ void PoweredUp::handleConnection() {
   // The hub button subscription isn't tied to a port, so it isn't covered by the re-arm
   // loop above - resend it once whenever a fresh connection is made.
   bool isConnected = bleConnected(_slot);
-  if (isConnected && !_wasConnectedForHubButton && _hubButtonHandler != nullptr &&
+  if (isConnected && !_wasConnectedForHubButton && (_onButtonPressed || _onButtonReleased) &&
       bleProtocol(_slot) == BLE_PROTOCOL_LWP3) {
     _sendHubButtonSubscribe(true);
   }
   _wasConnectedForHubButton = isConnected;
+
+  // WeDo 2.0's per-port sensor config has no protocol-level re-arm (unlike LWP3's
+  // PortSubscription.reArmPending) - resend writePortDefinition() for every configured
+  // port once whenever a fresh connection is made, or the hub silently stops reporting
+  // that sensor after any reconnect.
+  if (isConnected && !_wasConnectedForWedoDevices && bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
+    for (uint8_t i = 0; i < 2; i++) {
+      if (_wedoDevices[i] > 0) {
+        writePortDefinition(i + 1, _wedoDevices[i], 0, _wedoRangeFormatFor(_wedoDevices[i]));
+      }
+    }
+  }
+  _wasConnectedForWedoDevices = isConnected;
+
+  // Keyboard-style repeat-while-held for remoteButton()'s up/down (if repeatMs was
+  // given) - checked here, never from inside the notification callback, same reasoning
+  // as the re-arm loop above. Already naturally suppressed while stop is held, since
+  // _handleRemoteButtonRaw() forces _held false for up/down in that case.
+  unsigned long now = millis();
+  for (uint8_t i = 0; i < MAX_REMOTE_BUTTON_GROUPS; i++) {
+    if (!_remoteButtons[i]._inUse) {
+      continue;
+    }
+    ButtonEdge& up = _remoteButtons[i].up;
+    ButtonEdge& down = _remoteButtons[i].down;
+    if (up._held && up._repeatMs > 0 && now >= up._nextRepeatAt) {
+      if (up._onPressed) up._onPressed();
+      up._nextRepeatAt = now + up._repeatMs;
+    }
+    if (down._held && down._repeatMs > 0 && now >= down._nextRepeatAt) {
+      if (down._onPressed) down._onPressed();
+      down._nextRepeatAt = now + down._repeatMs;
+    }
+  }
 }
 
-void PoweredUp::monitorHubButton(inputHandlerFunction callback) {
+void PoweredUp::onButtonPressed(std::function<void()> callback) {
   BLEHubProtocol protocol = bleProtocol(_slot);
   if (protocol != BLE_PROTOCOL_LWP3 && protocol != BLE_PROTOCOL_WEDO) {
-    printf("monitorHubButton is only supported for WeDo 2.0 and LEGO Powered Up / BOOST / train hubs\n");
+    printf("onButtonPressed is only supported for WeDo 2.0 and LEGO Powered Up / BOOST / train hubs\n");
     return;
   }
-  _hubButtonHandler = callback;
+  _onButtonPressed = callback;
   if (protocol == BLE_PROTOCOL_LWP3) {
     _sendHubButtonSubscribe(true);
   }
   // WeDo's button characteristic is already subscribed to at connect time (see
   // ble_functions.cpp) - no separate enable command needed, unlike LWP3's Hub
   // Properties message.
+}
+
+void PoweredUp::onButtonReleased(std::function<void()> callback) {
+  BLEHubProtocol protocol = bleProtocol(_slot);
+  if (protocol != BLE_PROTOCOL_LWP3 && protocol != BLE_PROTOCOL_WEDO) {
+    printf("onButtonReleased is only supported for WeDo 2.0 and LEGO Powered Up / BOOST / train hubs\n");
+    return;
+  }
+  _onButtonReleased = callback;
+  if (protocol == BLE_PROTOCOL_LWP3) {
+    _sendHubButtonSubscribe(true);
+  }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -320,11 +370,15 @@ void PoweredUp::writeIndexColor(uint8_t color) {
   }
 
   if (bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
+    if (_wedoLedModeActive == 0x00 && _lastIndexColor == color) {
+      return; // unchanged since last write - avoid flooding the hub with redundant writes
+    }
     _ensureWedoLedMode(0x00);
   }
   // From http://ofalcao.pt/blog/2016/wedo-2-0-colors-with-python
   uint8_t command[] = {0x06, 0x04, 0x01, color};
   writeCommand(command, sizeof(command));
+  _lastIndexColor = color;
 }
 
 void PoweredUp::writeRGB(uint8_t red, uint8_t green, uint8_t blue) {
@@ -344,10 +398,16 @@ void PoweredUp::writeRGB(uint8_t red, uint8_t green, uint8_t blue) {
   }
 
   if (bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
+    if (_wedoLedModeActive == 0x01 && _lastRGB[0] == red && _lastRGB[1] == green && _lastRGB[2] == blue) {
+      return; // unchanged since last write - avoid flooding the hub with redundant writes
+    }
     _ensureWedoLedMode(0x01);
   }
   uint8_t command[] = {0x06, 0x04, 0x03, red, green, blue};
   writeCommand(command, sizeof(command));
+  _lastRGB[0] = red;
+  _lastRGB[1] = green;
+  _lastRGB[2] = blue;
 }
 
 void PoweredUp::writeSound(unsigned int frequency, unsigned int length) {
@@ -383,11 +443,18 @@ void PoweredUp::writePortDefinition(uint8_t port, uint8_t type, uint8_t mode, ui
   writeCommand(command, sizeof(command), WEDO_INPUT);
 }
 
-// WeDo 2.0 has no way to ask "what's plugged into this port" - unlike LWP3's attach
-// events, there's nothing to auto-detect. If no port was given, this guesses port A and
-// says so, since that's the best this protocol can do.
+// The detect/distance sensor's raw UART range depends on the format byte, not the hub
+// it's plugged into - RANGE_10 here matches the 0-10 range LWP3's DETECT_MODE already
+// uses natively, so onDistanceChanged() reports the same scale on WeDo 2.0 and Powered
+// Up/BOOST hubs alike. The tilt sensor's angle mode isn't affected by this byte the same
+// way (RANGE_100 already verified live as the correct -45..45 degree reading), so it
+// keeps the format that's been confirmed working.
+static uint8_t _wedoRangeFormatFor(uint8_t deviceId) {
+  return deviceId == ID_DETECT_SENSOR ? RANGE_10 : RANGE_100;
+}
+
 void PoweredUp::_monitorWedoDevice(int portArg, bool portGiven, uint8_t deviceId, const char* label,
-                                    inputHandlerFunction callback) {
+                                    RawInputHandler callback) {
   uint8_t p;
 
   if (portGiven) {
@@ -411,18 +478,60 @@ void PoweredUp::_monitorWedoDevice(int portArg, bool portGiven, uint8_t deviceId
       }
     }
     if (!found) {
-      printf("%s: WeDo 2.0 hasn't reported a matching device yet - assuming port A. "
-             "Call %s(port, callback) if it's on a different port.\n", label, label);
+      printf("%s: WeDo 2.0 hasn't reported a matching device yet - assuming port A for now, "
+             "will correct automatically once it attaches. Call %s(port, callback) if it's on "
+             "a different port.\n", label, label);
+      // Register for correction once the real attach event arrives (via the port-type
+      // characteristic, _handleWedoPortTypeNotification/_resolveWedoPendingMonitors) -
+      // guessing port A right now would otherwise stick permanently if wrong, since
+      // there's no other trigger to revisit it. This is the WeDo-side equivalent of
+      // _monitorWithFallback()'s pending-monitor mechanism for LWP3.
+      for (uint8_t i = 0; i < MAX_WEDO_PENDING; i++) {
+        if (!_wedoPending[i].waiting) {
+          _wedoPending[i].waiting = true;
+          _wedoPending[i].deviceId = deviceId;
+          _wedoPending[i].callback = callback;
+          _wedoPending[i].label = label;
+          break;
+        }
+      }
     }
   }
 
-  writePortDefinition(p + 1, deviceId, 0, RANGE_100);
+  writePortDefinition(p + 1, deviceId, 0, _wedoRangeFormatFor(deviceId));
   _wedoDevices[p] = deviceId;
   _wedoHandlers[p] = callback;
 }
 
+// Counterpart to _resolvePendingMonitors() (LWP3) - corrects a port-less
+// onDistanceChanged()/onTiltChanged() call that guessed port A once a real attach event
+// confirms where the device actually is. port is 1-based, matching the port-type
+// characteristic's own numbering.
+void PoweredUp::_resolveWedoPendingMonitors(uint8_t port, uint8_t deviceId) {
+  if (port < 1 || port > 2) {
+    return;
+  }
+  uint8_t idx = port - 1;
+  for (uint8_t i = 0; i < MAX_WEDO_PENDING; i++) {
+    if (!_wedoPending[i].waiting || _wedoPending[i].deviceId != deviceId) {
+      continue;
+    }
+    if (_wedoDevices[idx] != deviceId) {
+      printf("%s: found the expected device on port %d, switching to it\n", _wedoPending[i].label, port);
+      // Safe to call from here even though this runs inside the notification callback -
+      // writePortDefinition() goes through writeCommand()/bleWriteCommand(), which
+      // queues automatically in that context (same reasoning as the LED colour resend
+      // in _handleLwp3Notification's attach handling).
+      writePortDefinition(port, deviceId, 0, _wedoRangeFormatFor(deviceId));
+      _wedoDevices[idx] = deviceId;
+      _wedoHandlers[idx] = _wedoPending[i].callback;
+    }
+    _wedoPending[i].waiting = false;
+  }
+}
+
 // ---------------------------------------------------------------------------------------
-// LWP3 port subscriptions (monitorInput / monitorButton / monitorDistance)
+// LWP3 port subscriptions (monitorInput / onDistanceChanged / onTiltChanged / remoteButton)
 // ---------------------------------------------------------------------------------------
 
 int PoweredUp::_findSubscription(uint8_t port) {
@@ -450,7 +559,7 @@ int PoweredUp::_allocSubscription(uint8_t port) {
   return -1;
 }
 
-void PoweredUp::monitorInput(int port, inputHandlerFunction callback, uint8_t mode) {
+void PoweredUp::monitorInput(int port, RawInputHandler callback, uint8_t mode) {
   if (bleProtocol(_slot) != BLE_PROTOCOL_LWP3) {
     printf("monitorInput is only supported for LEGO Powered Up / BOOST / train hubs and remotes\n");
     return;
@@ -507,11 +616,11 @@ int PoweredUp::_findAttachedPort(const uint16_t* candidateTypes, uint8_t candida
   return -1;
 }
 
-// --- monitorButton() / monitorDistance() (simple, with fallback search) ------------
+// --- onDistanceChanged() / onTiltChanged() / remoteButton() (simple, with fallback search) ---
 
 void PoweredUp::_monitorWithFallback(int portArg, bool portGiven, const uint16_t* candidateTypes,
                                       uint8_t candidateCount, const char* label, uint8_t mode,
-                                      inputHandlerFunction callback) {
+                                      RawInputHandler callback) {
   if (bleProtocol(_slot) != BLE_PROTOCOL_LWP3) {
     printf("%s is only supported for LEGO Powered Up / BOOST / train hubs and remotes\n", label);
     return;
@@ -615,54 +724,182 @@ void PoweredUp::_resolvePendingMonitors(uint8_t port, uint16_t ioTypeId) {
   }
 }
 
-void PoweredUp::monitorButton(inputHandlerFunction callback) {
-  uint16_t candidates[] = {IO_TYPE_REMOTE_BUTTON};
-  _monitorWithFallback(0, false, candidates, 1, "monitorButton", KEYSD, callback);
-}
+// onDistanceChanged()/onTiltChanged() work on both protocols: WeDo 2.0 (via
+// _monitorWedoDevice(), which matches against the attach reports the port-type
+// characteristic sends - or guesses port A if called before the first one has arrived)
+// and LWP3 (via the attached-device directory in _monitorWithFallback()).
+//
+// The distance reading is 0-10 on both protocols: it's a property of the sensor's UART
+// mode, not the hub, so _wedoRangeFormatFor() configures WeDo 2.0's RANGE_10 to match
+// LWP3's native DETECT_MODE range instead of the WeDo-specific RANGE_100 used elsewhere.
 
-void PoweredUp::monitorButton(int port, inputHandlerFunction callback) {
-  uint16_t candidates[] = {IO_TYPE_REMOTE_BUTTON};
-  _monitorWithFallback(port, true, candidates, 1, "monitorButton", KEYSD, callback);
-}
-
-// monitorDistance()/monitorTiltSensor() work on both protocols: WeDo 2.0 (which can't
-// auto-detect ports, so _monitorWedoDevice() guesses port A) and LWP3 (which can, via
-// the attached-device directory in _monitorWithFallback()).
-
-void PoweredUp::monitorDistance(inputHandlerFunction callback) {
+void PoweredUp::onDistanceChanged(std::function<void(int8_t)> callback) {
   if (bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
-    _monitorWedoDevice(0, false, ID_DETECT_SENSOR, "monitorDistance", callback);
+    _monitorWedoDevice(0, false, ID_DETECT_SENSOR, "onDistanceChanged",
+                        [callback](int8_t* v, int size) { if (size >= 1) callback(v[0]); });
     return;
   }
   uint16_t candidates[] = {IO_TYPE_MOTION_SENSOR};
-  _monitorWithFallback(0, false, candidates, 1, "monitorDistance", DETECT_MODE, callback);
+  _monitorWithFallback(0, false, candidates, 1, "onDistanceChanged", DETECT_MODE,
+                        [callback](int8_t* v, int size) { if (size >= 1) callback(v[0]); });
 }
 
-void PoweredUp::monitorDistance(int port, inputHandlerFunction callback) {
+void PoweredUp::onTiltChanged(std::function<void(int8_t, int8_t)> callback) {
   if (bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
-    _monitorWedoDevice(port, true, ID_DETECT_SENSOR, "monitorDistance", callback);
+    _monitorWedoDevice(0, false, ID_TILT_SENSOR, "onTiltChanged",
+                        [callback](int8_t* v, int size) { if (size >= 2) callback(v[0], v[1]); });
+    return;
+  }
+  uint16_t candidates[] = {IO_TYPE_TILT_SENSOR};
+  _monitorWithFallback(0, false, candidates, 1, "onTiltChanged", ANGLE_MODE,
+                        [callback](int8_t* v, int size) { if (size >= 2) callback(v[0], v[1]); });
+}
+
+// --- port(): explicit port targeting + introspection --------------------------------
+
+PortHandle& PoweredUp::port(int portArg) {
+  uint8_t normalized = _normalizePort(portArg);
+  for (uint8_t i = 0; i < MAX_PORTS; i++) {
+    if (_ports[i]._owner != nullptr && _normalizePort(_ports[i]._port) == normalized) {
+      return _ports[i];
+    }
+  }
+  for (uint8_t i = 0; i < MAX_PORTS; i++) {
+    if (_ports[i]._owner == nullptr) {
+      _ports[i]._owner = this;
+      _ports[i]._port = portArg;
+      return _ports[i];
+    }
+  }
+  printf("port(): no room for another port handle (max %d)\n", MAX_PORTS);
+  return _ports[0];
+}
+
+uint16_t PoweredUp::_attachedIoType(uint8_t normalizedPort) {
+  if (bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
+    return normalizedPort < 2 ? _wedoAttachedDevice[normalizedPort] : 0;
+  }
+  for (uint8_t i = 0; i < MAX_ATTACHED_DEVICES; i++) {
+    if (_attached[i].inUse && _attached[i].port == normalizedPort) {
+      return _attached[i].ioTypeId;
+    }
+  }
+  return 0;
+}
+
+void PortHandle::onDistanceChanged(std::function<void(int8_t)> callback) {
+  if (!_owner) return;
+  if (bleProtocol(_owner->_slot) == BLE_PROTOCOL_WEDO) {
+    _owner->_monitorWedoDevice(_port, true, ID_DETECT_SENSOR, "port().onDistanceChanged",
+                                [callback](int8_t* v, int size) { if (size >= 1) callback(v[0]); });
     return;
   }
   uint16_t candidates[] = {IO_TYPE_MOTION_SENSOR};
-  _monitorWithFallback(port, true, candidates, 1, "monitorDistance", DETECT_MODE, callback);
+  _owner->_monitorWithFallback(_port, true, candidates, 1, "port().onDistanceChanged", DETECT_MODE,
+                                [callback](int8_t* v, int size) { if (size >= 1) callback(v[0]); });
 }
 
-void PoweredUp::monitorTiltSensor(inputHandlerFunction callback) {
-  if (bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
-    _monitorWedoDevice(0, false, ID_TILT_SENSOR, "monitorTiltSensor", callback);
+void PortHandle::onTiltChanged(std::function<void(int8_t, int8_t)> callback) {
+  if (!_owner) return;
+  if (bleProtocol(_owner->_slot) == BLE_PROTOCOL_WEDO) {
+    _owner->_monitorWedoDevice(_port, true, ID_TILT_SENSOR, "port().onTiltChanged",
+                                [callback](int8_t* v, int size) { if (size >= 2) callback(v[0], v[1]); });
     return;
   }
   uint16_t candidates[] = {IO_TYPE_TILT_SENSOR};
-  _monitorWithFallback(0, false, candidates, 1, "monitorTiltSensor", ANGLE_MODE, callback);
+  _owner->_monitorWithFallback(_port, true, candidates, 1, "port().onTiltChanged", ANGLE_MODE,
+                                [callback](int8_t* v, int size) { if (size >= 2) callback(v[0], v[1]); });
 }
 
-void PoweredUp::monitorTiltSensor(int port, inputHandlerFunction callback) {
-  if (bleProtocol(_slot) == BLE_PROTOCOL_WEDO) {
-    _monitorWedoDevice(port, true, ID_TILT_SENSOR, "monitorTiltSensor", callback);
+bool PortHandle::operator==(uint16_t ioType) const {
+  if (!_owner) return false;
+  return _owner->_attachedIoType(_owner->_normalizePort(_port)) == ioType;
+}
+
+// --- remoteButton(): Remote Control up/stop/down, as press/release events -----------
+
+void ButtonEdge::onPressed(std::function<void()> callback, uint16_t repeatMs) {
+  _onPressed = callback;
+  _repeatMs = repeatMs;
+}
+
+void ButtonEdge::onReleased(std::function<void()> callback) {
+  _onReleased = callback;
+}
+
+RemoteButtonHandle& PoweredUp::remoteButton() {
+  return _ensureRemoteButtonGroup(0, false);
+}
+
+RemoteButtonHandle& PoweredUp::remoteButton(int portArg) {
+  return _ensureRemoteButtonGroup(portArg, true);
+}
+
+RemoteButtonHandle& PoweredUp::_ensureRemoteButtonGroup(int portArg, bool portGiven) {
+  uint8_t normalized = portGiven ? _normalizePort(portArg) : 0;
+  for (uint8_t i = 0; i < MAX_REMOTE_BUTTON_GROUPS; i++) {
+    if (_remoteButtons[i]._inUse && _remoteButtons[i]._portGiven == portGiven &&
+        (!portGiven || _normalizePort(_remoteButtons[i]._requestedPort) == normalized)) {
+      return _remoteButtons[i];
+    }
+  }
+  for (uint8_t i = 0; i < MAX_REMOTE_BUTTON_GROUPS; i++) {
+    if (_remoteButtons[i]._inUse) {
+      continue;
+    }
+    _remoteButtons[i]._inUse = true;
+    _remoteButtons[i]._portGiven = portGiven;
+    _remoteButtons[i]._requestedPort = portGiven ? portArg : 0;
+
+    uint16_t candidates[] = {IO_TYPE_REMOTE_BUTTON};
+    RemoteButtonHandle* group = &_remoteButtons[i];
+    _monitorWithFallback(portArg, portGiven, candidates, 1, "remoteButton", KEYSD,
+                          [this, group](int8_t* value, int size) {
+                            this->_handleRemoteButtonRaw(*group, value, size);
+                          });
+    return _remoteButtons[i];
+  }
+  printf("remoteButton: no room for another remote button group (max %d)\n", MAX_REMOTE_BUTTON_GROUPS);
+  return _remoteButtons[0];
+}
+
+// Edge-detection (and Stop-priority) for the remote's up/stop/down level state - the
+// library-side replacement for what a sketch used to hand-roll (upHeld/downHeld
+// booleans, "up && !upHeld" rising-edge checks).
+void PoweredUp::_handleRemoteButtonRaw(RemoteButtonHandle& s, int8_t* value, int size) {
+  if (size < 3) {
     return;
   }
-  uint16_t candidates[] = {IO_TYPE_TILT_SENSOR};
-  _monitorWithFallback(port, true, candidates, 1, "monitorTiltSensor", ANGLE_MODE, callback);
+  bool up = value[0], stop = value[1], down = value[2];
+
+  if (stop && !s.stop._held) {
+    if (s.stop._onPressed) s.stop._onPressed();
+  } else if (!stop && s.stop._held) {
+    if (s.stop._onReleased) s.stop._onReleased();
+  }
+
+  if (!stop) {
+    if (up && !s.up._held) {
+      if (s.up._onPressed) s.up._onPressed();
+      s.up._nextRepeatAt = millis() + s.up._repeatMs;
+    } else if (!up && s.up._held) {
+      if (s.up._onReleased) s.up._onReleased();
+    }
+    if (down && !s.down._held) {
+      if (s.down._onPressed) s.down._onPressed();
+      s.down._nextRepeatAt = millis() + s.down._repeatMs;
+    } else if (!down && s.down._held) {
+      if (s.down._onReleased) s.down._onReleased();
+    }
+  } else {
+    // Stop takes priority - if up/down were held, treat Stop as also releasing them.
+    if (s.up._held && s.up._onReleased) s.up._onReleased();
+    if (s.down._held && s.down._onReleased) s.down._onReleased();
+  }
+
+  s.up._held = stop ? false : up;
+  s.stop._held = stop;
+  s.down._held = stop ? false : down;
 }
 
 void PoweredUp::stopMonitoring(int port) {
@@ -684,11 +921,29 @@ void PoweredUp::stopMonitoring(int port) {
     _subscriptions[idx].handler = nullptr;
     _subscriptions[idx].reArmPending = false;
   }
+
+  // Any port() handle for this port becomes stale (its monitoring, if any, just stopped).
+  for (uint8_t i = 0; i < MAX_PORTS; i++) {
+    if (_ports[i]._owner != nullptr && _normalizePort(_ports[i]._port) == p) {
+      _ports[i] = PortHandle();
+    }
+  }
+
+  // Any remoteButton() group explicitly targeting this port becomes stale too.
+  for (uint8_t i = 0; i < MAX_REMOTE_BUTTON_GROUPS; i++) {
+    if (_remoteButtons[i]._inUse && _remoteButtons[i]._portGiven &&
+        _normalizePort(_remoteButtons[i]._requestedPort) == p) {
+      _remoteButtons[i] = RemoteButtonHandle();
+    }
+  }
 }
 
 void PoweredUp::stopMonitoring() {
   _wedoDevices[0] = _wedoDevices[1] = 0;
   _wedoHandlers[0] = _wedoHandlers[1] = nullptr;
+  for (uint8_t i = 0; i < MAX_WEDO_PENDING; i++) {
+    _wedoPending[i] = WedoPendingMonitor();
+  }
 
   for (uint8_t i = 0; i < MAX_SUBSCRIPTIONS; i++) {
     if (!_subscriptions[i].inUse) {
@@ -702,9 +957,17 @@ void PoweredUp::stopMonitoring() {
     _subscriptions[i].reArmPending = false;
   }
 
-  if (_hubButtonHandler != nullptr) {
+  if (_onButtonPressed || _onButtonReleased) {
     _sendHubButtonSubscribe(false);
-    _hubButtonHandler = nullptr;
+    _onButtonPressed = nullptr;
+    _onButtonReleased = nullptr;
+  }
+
+  for (uint8_t i = 0; i < MAX_PORTS; i++) {
+    _ports[i] = PortHandle();
+  }
+  for (uint8_t i = 0; i < MAX_REMOTE_BUTTON_GROUPS; i++) {
+    _remoteButtons[i] = RemoteButtonHandle();
   }
 }
 
@@ -849,9 +1112,10 @@ void PoweredUp::_handleLwp3Notification(uint8_t* data, int size) {
 
   if (messageType == LWP_HUB_PROPERTIES) {
     if (size >= 6 && data[3] == HUB_PROPERTY_BUTTON && data[4] == HUB_PROPERTY_OP_UPDATE) {
-      if (_hubButtonHandler != nullptr) {
-        int8_t value[] = {(int8_t)data[5]}; // 1 = pressed, 0 = released
-        _hubButtonHandler(value, 1);
+      if (data[5] == 1) {
+        if (_onButtonPressed) _onButtonPressed();
+      } else {
+        if (_onButtonReleased) _onButtonReleased();
       }
     }
     return;
@@ -898,7 +1162,7 @@ void PoweredUp::_handleLwp3Notification(uint8_t* data, int size) {
       // handleConnection(), same reason as the re-arm below.
       _queuePortDiscovery(port, ioTypeId);
 
-      // Let monitorButton()/monitorDistance() calls waiting on this device resolve now.
+      // Let onDistanceChanged()/onTiltChanged()/remoteButton() calls waiting on this device resolve now.
       _recordAttached(port, ioTypeId);
 
       // The hub drops a port's input format subscription whenever its device detaches,
@@ -1028,7 +1292,7 @@ void PoweredUp::_handleWedoNotification(uint8_t* data, int size) {
         }
       }
     } else {
-      printf("Can't handle the message - perhaps you didn't use monitorDistance()/monitorTiltSensor()\n");
+      printf("Can't handle the message - perhaps you didn't use onDistanceChanged()/onTiltChanged()\n");
     }
   }
 }
@@ -1062,6 +1326,7 @@ void PoweredUp::_handleWedoPortTypeNotification(uint8_t* data, int size) {
   uint8_t deviceType = size >= 4 ? data[3] : 0;
   printf("WeDo device attached on port %d, device type: %d\n", port, deviceType);
   _wedoAttachedDevice[idx] = deviceType;
+  _resolveWedoPendingMonitors(port, deviceType);
 }
 
 void PoweredUp::_handleNotification(uint8_t* data, int size, BLENotificationSource source) {
@@ -1085,11 +1350,13 @@ void PoweredUp::_handleNotification(uint8_t* data, int size, BLENotificationSour
   }
 
   if (source == BLE_NOTIFY_WEDO_BUTTON) {
-    // Single byte: 0x00/0x01 (released/pressed) - same shape monitorHubButton()
-    // callers already expect from the LWP3 side.
-    if (_hubButtonHandler != nullptr && size >= 1) {
-      int8_t value[] = {(int8_t)data[0]};
-      _hubButtonHandler(value, 1);
+    // Single byte: 0x00/0x01 (released/pressed) - same shape the LWP3 side dispatches to.
+    if (size >= 1) {
+      if (data[0] == 1) {
+        if (_onButtonPressed) _onButtonPressed();
+      } else {
+        if (_onButtonReleased) _onButtonReleased();
+      }
     }
     return;
   }
@@ -1097,7 +1364,7 @@ void PoweredUp::_handleNotification(uint8_t* data, int size, BLENotificationSour
   _handleWedoNotification(data, size);
 }
 
-void PoweredUp::addNotificationHandler(void (*f)(uint8_t*, int)) {
+void PoweredUp::addNotificationHandler(std::function<void(uint8_t*, int)> f) {
   // Overrule the standard notification handling
   _userNotificationOverride = f;
 }

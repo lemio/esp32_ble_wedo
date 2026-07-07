@@ -13,25 +13,21 @@ port number needed.
 
 #define POT_PIN 8  //(1-10 for ADC1)
 
-//This searches for any LEGO device nearby (remotes, hubs, lego wedo, etc.) and connects to the first one it finds. 
-//If you have more than one LEGO device nearby, you can specify a name or device type in the constructor to connect to a specific one.
-//PoweredUp hub("devicename", DEVICE_TYPE_POWERED_UP_HUB); //Connect to a specific hub by name
-PoweredUp hub;
+// DEVICE_TYPE_ANY_HUB accepts any hub - WeDo 2.0, Powered Up, BOOST, train, Duplo - but
+// never a Remote Control, so this doesn't accidentally connect to a nearby remote
+// instead of an actual hub with a motor. If you have more than one hub nearby, you can
+// specify a name too: PoweredUp hub("devicename", DEVICE_TYPE_POWERED_UP_HUB);
+PoweredUp hub(nullptr, DEVICE_TYPE_ANY_HUB);
 
 // Which LEGO_COLOR_* the hub's LED is currently showing. Cycles 1-9 only - 0 and 10
 // look like the LED is off/washed out on most hubs.
 int colorIndex = 1;
 
-// The hub's own physical button - only react to it being pressed, not released, so one
-// press = one colour change rather than two.
-void hubButtonAction(int8_t* value, int size) {
-  if (size < 1 || value[0] != 1) return;
-  colorIndex = (colorIndex % 9) + 1;
-}
-
 void setup() {
   hub.connect();
-  hub.monitorHubButton(hubButtonAction);
+  hub.onButtonPressed([](){
+    colorIndex = (colorIndex % 9) + 1;
+  });
   hub.writeIndexColor(colorIndex);
 }
 

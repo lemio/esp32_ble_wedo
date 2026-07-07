@@ -6,8 +6,10 @@ Needs the Adafruit NeoPixel library (Library Manager / adafruit/Adafruit NeoPixe
 
 Controls:
 - Remote port A up/down: step the train's speed by 10%. Hold to keep stepping (repeats
-  every 200ms, like a keyboard key repeating while held).
-- Remote port A stop (middle/red): stop the train immediately (speed back to 0).
+  every 200ms, like a keyboard key repeating while held) - remoteButton()'s onPressed()
+  repeatMs parameter does this for us, no manual timer needed.
+- Remote port A stop (middle/red): stop the train immediately (speed back to 0). Also
+  takes priority over up/down if somehow held at the same time - built into the library.
 - The train hub's own button (the LEGO-logo button on the hub, not the remote): cycles
   through the built-in LEGO colours - the hub's LED and the remote's LED always show the
   same colour, so the remote acts as a little status light for the hub too.
@@ -64,12 +66,6 @@ int trainSpeed = 0;  // -100..100, in steps of SPEED_STEP_PERCENT
 // of the 0-10 range are skipped to keep hub and remote showing the same visible colour.
 int colorIndex = 1;
 
-// Tracks whether up/down is currently being held, so loop() knows whether to keep
-// repeating the speed step every REPEAT_INTERVAL_MS.
-bool upHeld = false;
-bool downHeld = false;
-unsigned long nextRepeatAt = 0;
-
 void setTrainSpeed(int newSpeed) {
   if (newSpeed > 100) newSpeed = 100;
   if (newSpeed < -100) newSpeed = -100;
@@ -106,37 +102,6 @@ void updateSpeedGauge() {
   strip.show();
 }
 
-// Remote port A: value[0]=up held, value[1]=stop held, value[2]=down held.
-void remoteButtonAction(int8_t* value, int size) {
-  if (size < 3) return;
-  bool up = value[0];
-  bool stop = value[1];
-  bool down = value[2];
-
-  if (stop) {
-    setTrainSpeed(0);
-  } else if (up && !upHeld) {
-    setTrainSpeed(trainSpeed + SPEED_STEP_PERCENT);
-    nextRepeatAt = millis() + REPEAT_INTERVAL_MS;
-  } else if (down && !downHeld) {
-    setTrainSpeed(trainSpeed - SPEED_STEP_PERCENT);
-    nextRepeatAt = millis() + REPEAT_INTERVAL_MS;
-  }
-
-  upHeld = up;
-  downHeld = down;
-}
-
-// The hub's own physical button - only react to it being pressed, not released, so one
-// press = one colour change rather than two.
-void hubButtonAction(int8_t* value, int size) {
-  if (size < 1 || value[0] != 1) return;
-
-  colorIndex = (colorIndex % 9) + 1; // cycle 1..9, skipping black (0) and white (10)
-  hub.writeIndexColor(colorIndex);
-  remote.writeIndexColor(colorIndex);
-}
-
 void setup() {
   Serial.begin(115200);
   strip.begin();
@@ -148,8 +113,17 @@ void setup() {
   remote.connect();
   Serial.println("Connected!");
 
-  remote.monitorButton('A', remoteButtonAction);
-  hub.monitorHubButton(hubButtonAction);
+  RemoteButtonHandle& btn = remote.remoteButton('A');
+  btn.up.onPressed([](){ setTrainSpeed(trainSpeed + SPEED_STEP_PERCENT); }, REPEAT_INTERVAL_MS);
+  btn.down.onPressed([](){ setTrainSpeed(trainSpeed - SPEED_STEP_PERCENT); }, REPEAT_INTERVAL_MS);
+  btn.stop.onPressed([](){ setTrainSpeed(0); });
+
+  // The hub's own physical button - cycles the shared colour, kept in sync on both LEDs.
+  hub.onButtonPressed([](){
+    colorIndex = (colorIndex % 9) + 1; // cycle 1..9, skipping black (0) and white (10)
+    hub.writeIndexColor(colorIndex);
+    remote.writeIndexColor(colorIndex);
+  });
 
   hub.writeIndexColor(colorIndex);
   remote.writeIndexColor(colorIndex);
@@ -159,13 +133,6 @@ void setup() {
 void loop() {
   hub.handleConnection();
   remote.handleConnection();
-
-  // Keyboard-style key repeat: keep stepping the speed while a button is held.
-  if ((upHeld || downHeld) && millis() >= nextRepeatAt) {
-    setTrainSpeed(trainSpeed + (upHeld ? SPEED_STEP_PERCENT : -SPEED_STEP_PERCENT));
-    nextRepeatAt = millis() + REPEAT_INTERVAL_MS;
-  }
-
   updateSpeedGauge();
   delay(20);
 }

@@ -1,4 +1,7 @@
 PoweredUp	KEYWORD1
+PortHandle	KEYWORD1
+ButtonEdge	KEYWORD1
+RemoteButtonHandle	KEYWORD1
 LegoDeviceType	KEYWORD1
 LegoIoType	KEYWORD1
 LedMode	KEYWORD1
@@ -8,7 +11,7 @@ CurrentMode	KEYWORD1
 RssiMode	KEYWORD1
 MotionSensorMode	KEYWORD1
 TiltSensorMode	KEYWORD1
-inputHandlerFunction	KEYWORD1
+RawInputHandler	KEYWORD1
 
 connect	KEYWORD2
 connected	KEYWORD2
@@ -25,12 +28,16 @@ writeRGB	KEYWORD2
 writeLight	KEYWORD2
 writePortDefinition	KEYWORD2
 
-#All the monitor functions
+#Buttons & sensors
 
-monitorButton	KEYWORD2
-monitorDistance	KEYWORD2
-monitorTiltSensor	KEYWORD2
-monitorHubButton	KEYWORD2
+onButtonPressed	KEYWORD2
+onButtonReleased	KEYWORD2
+onDistanceChanged	KEYWORD2
+onTiltChanged	KEYWORD2
+onPressed	KEYWORD2
+onReleased	KEYWORD2
+port	KEYWORD2
+remoteButton	KEYWORD2
 monitorInput	KEYWORD2
 stopMonitoring	KEYWORD2
 addNotificationHandler	KEYWORD2
