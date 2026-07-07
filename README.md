@@ -26,7 +26,8 @@ void loop() {
 }
 ```
 
-https://github.com/user-attachments/assets/92703554-2661-43a6-8563-1c84ce84e086
+
+https://github.com/user-attachments/assets/e2af3bfe-5ca0-48af-92df-ad1df9a39a3a
 
 See [`examples/button_motor`](examples/button_motor) for the full sketch.
 
@@ -85,7 +86,8 @@ void loop() {
 }
 ```
 
-<!-- TODO: record and embed a demo video here, showing the train hub driving forward/backward with the LED colour change, plus Serial output if a tilt sensor is attached -->
+
+https://github.com/user-attachments/assets/4fce5972-02e1-4a69-b312-a5ac862f64a9
 
 See [`examples/train_hub`](examples/train_hub) for the full sketch.
 
@@ -122,7 +124,8 @@ void loop() {
 }
 ```
 
-<!-- TODO: record and embed a demo video here, showing the remote's up/down/stop buttons driving the train's speed, the synced LED colours, and the NeoPixel speed gauge -->
+
+https://github.com/user-attachments/assets/c71aea2d-3c68-4cb2-ad71-37646fdeaefe
 
 See [`examples/train_remote`](examples/train_remote) for the full sketch (colour gauge, direction light, and NeoPixel wiring notes included).
 
@@ -152,7 +155,7 @@ void loop() {
 }
 ```
 
-<!-- TODO: record and embed a demo video here, showing the served web page and the motor responding to each link click -->
+https://github.com/user-attachments/assets/40f05ed4-cb06-491f-b153-1688b787da90
 
 See [`examples/wifi_control`](examples/wifi_control) for the full sketch.
 
@@ -192,7 +195,7 @@ void loop() {
 }
 ```
 
-<!-- TODO: record and embed a demo video here, showing the breadboard + potentiometer alongside the LEGO train responding to it -->
+https://github.com/user-attachments/assets/2882283a-fe08-4eb5-a36b-bcaa7341feb5
 
 See [`examples/analog_throttle`](examples/analog_throttle) for the full sketch and wiring notes.
 
