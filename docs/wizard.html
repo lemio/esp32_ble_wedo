@@ -49,6 +49,12 @@
             letter-spacing: -0.02em;
         }
 
+        .wizard-header .subtitle {
+            margin-top: 4px;
+            font-size: 0.85em;
+            color: #6b7280;
+        }
+
         .progress-steps {
             display: flex;
             gap: 12px;
@@ -112,10 +118,6 @@
         .step-indicator.completed .step-number {
             background: #d1d5db;
             color: white;
-        }
-
-        .step-indicator.completed .step-number::before {
-            content: '✓';
         }
 
         .step-indicator.completed .step-label {
@@ -306,11 +308,59 @@
             margin: 16px 0;
             line-height: 1.5;
             border: 1px solid #f0f0f0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #serialOutput {
+            max-height: 240px;
         }
 
         .console:empty::before {
             content: 'Waiting for connection...';
             color: #9ca3af;
+        }
+
+        .serial-monitor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+
+        .serial-monitor-header h4 {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .serial-monitor-header .btn-secondary,
+        .serial-controls button {
+            flex-shrink: 0;
+            padding: 6px 14px;
+            font-size: 0.8em;
+        }
+
+        .serial-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .serial-controls input {
+            flex: 1;
+            min-width: 0;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+
+        .serial-controls input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         .firmware-card {
@@ -353,6 +403,18 @@
             background: #f3f4f6;
             border-radius: 4px;
             padding: 2px 6px;
+        }
+
+        .firmware-card .source-link {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.75em;
+            color: #3b82f6;
+            text-decoration: none;
+        }
+
+        .firmware-card .source-link:hover {
+            text-decoration: underline;
         }
 
         .variable-input-group {
@@ -658,6 +720,7 @@
     <div class="wizard-container">
         <div class="wizard-header">
             <h1>ESP32-S3 Flash Wizard</h1>
+            <p class="subtitle" id="wizardSubtitle" style="display: none;"></p>
         </div>
 
         <div class="progress-steps">
@@ -705,7 +768,7 @@
                     </div>
 
                     <div class="animation-box">
-                        <video autoplay loop muted playsinline style="width: 100%; max-width: 300px; height: 300px; object-fit: cover; border-radius: 8px;">
+                        <video id="step1BootVideo" autoplay loop muted playsinline style="width: 100%; max-width: 300px; height: 300px; object-fit: cover; border-radius: 8px;">
                             <source src="boot_mode.webm" type="video/webm">
                             Your browser does not support the video tag.
                         </video>
@@ -759,7 +822,7 @@
                     </div>
 
                     <div style="text-align: center; margin-top: 20px;">
-                        <video autoplay loop muted playsinline style="width: 100%; max-width: 300px; height: 300px; object-fit: cover; border-radius: 8px;">
+                        <video id="step3ResetVideo" autoplay loop muted playsinline style="width: 100%; max-width: 300px; height: 300px; object-fit: cover; border-radius: 8px;">
                             <source src="reset_only.webm" type="video/webm">
                             Your browser does not support the video tag.
                         </video>
@@ -791,7 +854,17 @@
                     </ul>
                 </div>
 
-                <div class="console" id="consoleStep4"></div>
+                <div id="serialMonitorBlock" class="expected-result" style="display: none;">
+                    <div class="serial-monitor-header">
+                        <h4 style="margin: 0;">Live Serial Output</h4>
+                        <button class="btn-secondary" id="serialToggleBtn">Stop Monitor</button>
+                    </div>
+                    <div class="console" id="serialOutput"></div>
+                    <div class="serial-controls">
+                        <input type="text" id="serialInput" placeholder="Type a message and press Enter to send to the device">
+                        <button class="btn-secondary" id="serialSendBtn">Send</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -814,6 +887,7 @@
         let selectedFirmware = null;
         let chipInfo = {};
         let isDeviceConnected = false;
+        let serialMonitorActive = false;
 
         // Check URL parameter for password hiding
         const urlParams = new URLSearchParams(window.location.search);
@@ -831,6 +905,108 @@
         };
 
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // ==================== SERIAL MONITOR ====================
+
+        // Keeps both DOM node count and memory bounded - without this, a device stuck
+        // in a boot loop spamming the same message can grow the console without limit
+        // and freeze the tab.
+        const MAX_SERIAL_CHARS = 200000;
+        let serialCharCount = 0;
+
+        // appendChild(textNode) instead of `el.textContent += text`: the latter
+        // destroys and recreates the *entire* text content on every single chunk,
+        // which silently clears any text the user has selected. Appending a new node
+        // leaves existing nodes - and any selection anchored in them - alone.
+        const appendSerialText = (el, text) => {
+            el.appendChild(document.createTextNode(text));
+            serialCharCount += text.length;
+            while (serialCharCount > MAX_SERIAL_CHARS && el.firstChild) {
+                serialCharCount -= el.firstChild.textContent.length;
+                el.removeChild(el.firstChild);
+            }
+            // Only auto-scroll if already near the bottom - otherwise this fights
+            // anyone trying to read or select output further up.
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) {
+                el.scrollTop = el.scrollHeight;
+            }
+        };
+
+        // Reads raw (non-SLIP-framed) bytes straight from the same port used for
+        // flashing - transport.rawRead() bypasses esptool-js's SLIP packet parsing,
+        // which is only meant for talking to the ROM bootloader/stub. Assumes the
+        // firmware's Serial.begin() matches CONFIG.BAUD_RATE (115200, the standard
+        // Arduino default) - the port was already opened at that rate and is never
+        // changed since romBaudrate === baudrate in this tool's config. On boards
+        // where resetting causes a real USB re-enumeration (native USB-JTAG/Serial),
+        // `transport`/`device` may already be stale by the time this runs - rawRead()
+        // fails fast and is caught below rather than crashing the wizard.
+        const startSerialMonitor = async () => {
+            if (!transport?.device?.readable || serialMonitorActive) return;
+            serialMonitorActive = true;
+            document.getElementById('serialMonitorBlock').style.display = 'block';
+            const consoleEl = document.getElementById('serialOutput');
+            consoleEl.textContent = '';
+            consoleEl.style.display = 'block';
+            serialCharCount = 0;
+            document.getElementById('serialToggleBtn').textContent = 'Stop Monitor';
+
+            if (!transport.reader) {
+                transport.reader = transport.device.readable?.getReader();
+            }
+
+            const decoder = new TextDecoder();
+            try {
+                for await (const chunk of transport.rawRead()) {
+                    appendSerialText(consoleEl, decoder.decode(chunk, { stream: true }));
+                }
+            } catch (e) {
+                // Expected once stopSerialMonitor() cancels the reader, or the device disconnects.
+            } finally {
+                serialMonitorActive = false;
+                document.getElementById('serialToggleBtn').textContent = 'Start Monitor';
+            }
+        };
+
+        const stopSerialMonitor = async () => {
+            if (!serialMonitorActive) return;
+            try {
+                await transport?.reader?.cancel();
+                await transport?.waitForUnlock(50);
+            } catch (e) {
+                // Already closed/disconnected - nothing to clean up.
+            }
+            if (transport) transport.reader = undefined;
+        };
+
+        // Single toggle button instead of a lone "Stop" button with no way back -
+        // clicking it again while stopped restarts the monitor (reopens a reader on
+        // the same still-open port, same as the automatic first start).
+        document.getElementById('serialToggleBtn').addEventListener('click', () => {
+            if (serialMonitorActive) {
+                stopSerialMonitor();
+            } else {
+                startSerialMonitor(); // not awaited - open-ended loop, see its own comment
+            }
+        });
+
+        const sendSerialLine = async () => {
+            const input = document.getElementById('serialInput');
+            const text = input.value;
+            if (!text || !transport?.device?.writable) return;
+            const writer = transport.device.writable.getWriter();
+            try {
+                await writer.write(new TextEncoder().encode(text + '\n'));
+            } finally {
+                writer.releaseLock();
+            }
+            input.value = '';
+        };
+
+        document.getElementById('serialSendBtn').addEventListener('click', () => sendSerialLine());
+        document.getElementById('serialInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendSerialLine();
+        });
 
         const storage = {
             get: (key, defaultValue) => localStorage.getItem(`fw_var_${key}`) ?? defaultValue,
@@ -1020,22 +1196,49 @@
                     <h3>${config.name}</h3>
                     <p>${config.description}</p>
                     ${config.hardware ? `<span class="hardware">${config.hardware}</span>` : ''}
+                    ${config.sourceUrl ? `<a href="${config.sourceUrl}" target="_blank" rel="noopener noreferrer" class="source-link">View source ↗</a>` : ''}
                 `;
                 card.addEventListener('click', () => selectFirmware(key));
+                // Don't let clicking the source link also select the card underneath it.
+                card.querySelector('.source-link')?.addEventListener('click', (e) => e.stopPropagation());
                 container.appendChild(card);
             });
         };
 
         const selectFirmware = (key) => {
             selectedFirmware = key;
-            
+
             document.querySelectorAll('.firmware-card').forEach(card => {
                 card.classList.remove('selected');
             });
             event.target.closest('.firmware-card').classList.add('selected');
 
-            renderVariables(FIRMWARE_CONFIGS[key]);
+            const config = FIRMWARE_CONFIGS[key];
+            renderVariables(config);
+            applyResetVideo(config);
             updateButtons();
+
+            // Scroll the configuration fields into view - easy to miss otherwise, since
+            // they render below the firmware list and this step's content area scrolls
+            // independently of the page.
+            if (config.variables?.length) {
+                document.getElementById('variablesContainer')
+                    .scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        };
+
+        // Step 3's reset video: this firmware's own override, else the site-wide
+        // default, else leave the built-in reset_only.webm alone. Firmware is already
+        // known by the time step 3 shows (selected back in step 2), unlike step 1's
+        // boot video which has no firmware-specific choice to apply yet.
+        const applyResetVideo = (config) => {
+            const url = config?.resetVideo || siteConfig.resetVideo;
+            if (!url) return;
+            const source = document.querySelector('#step3ResetVideo source');
+            if (source) {
+                source.src = url;
+                source.closest('video').load();
+            }
         };
 
         const renderVariables = (config) => {
@@ -1201,46 +1404,61 @@
                 log('✅ Flash complete!', 3);
                 document.getElementById('flashStatus').textContent = 'Flash complete! Resetting device...';
 
-                // Try to reset automatically first - usingUsbOtg must be true for
-                // boards connected via their native USB-JTAG/Serial peripheral (PID
-                // 0x1001, e.g. the ESP32-S3's built-in USB port), or esptool-js's
-                // hard_reset won't actually toggle the right sequence. If this doesn't
-                // trigger a disconnect (some boards/browsers still need a physical
-                // press), the instructions below still work as a fallback.
+                // Pulse RTS explicitly - assert, wait, release - the same sequence
+                // confirmed working by other web flashers (e.g.
+                // https://github.com/thelastoutpostworkshop/ESPConnect). Deliberately
+                // NOT esptool-js's esploader.after(): it only ever *releases* RTS,
+                // assuming it's already asserted, and is a no-op if that assumption
+                // doesn't hold (confirmed in practice: it reports success but the
+                // device stays in bootloader mode).
+                let autoResetSucceeded = false;
                 try {
-                    const usingUsbOtg = transport.getPid() === esploader.USB_JTAG_SERIAL_PID;
-                    await esploader.after('hard_reset', usingUsbOtg);
+                    await transport.setRTS(true);
+                    await sleep(100);
+                    await transport.setRTS(false);
+                    await sleep(1000);
                     log('✓ Sent automatic reset', 3);
+                    autoResetSucceeded = true;
                 } catch (e) {
                     log('Automatic reset failed - press RESET manually', 2);
                 }
 
-                // Show reset instructions (fallback for boards where the automatic
-                // reset above doesn't trigger a disconnect)
-                document.getElementById('resetInstructions').style.display = 'block';
-                document.getElementById('flashStatus').textContent = 'Flash complete - press RESET if the device doesn\'t continue automatically';
+                if (autoResetSucceeded) {
+                    // Don't wait for a "disconnect" event here - on native-USB-JTAG
+                    // boards (the common case), a chip-level EN reset doesn't drop the
+                    // USB connection at all, so that event never fires. This used to
+                    // block here for up to 60 seconds every single time before ever
+                    // reaching step 4 or starting the serial monitor.
+                    document.getElementById('flashStatus').textContent = 'Flash complete - device is running the new firmware';
+                } else {
+                    // Only fall back to manual instructions + waiting for a disconnect
+                    // if the automatic pulse itself failed (e.g. the port was already
+                    // gone) - and cap the wait much shorter than before, since this is
+                    // now a courtesy wait, not something every flash sits through.
+                    document.getElementById('resetInstructions').style.display = 'block';
+                    document.getElementById('flashStatus').textContent = 'Flash complete - press RESET if the device doesn\'t continue automatically';
 
-                // Wait for device disconnect (happens automatically above, or when the user presses RESET)
-                const waitForDisconnect = new Promise((resolve) => {
-                    const handleDisconnect = (event) => {
-                        if (event.target === device) {
+                    await new Promise((resolve) => {
+                        const handleDisconnect = (event) => {
+                            if (event.target === device) {
+                                navigator.serial.removeEventListener('disconnect', handleDisconnect);
+                                resolve();
+                            }
+                        };
+                        navigator.serial.addEventListener('disconnect', handleDisconnect);
+                        setTimeout(() => {
                             navigator.serial.removeEventListener('disconnect', handleDisconnect);
                             resolve();
-                        }
-                    };
-                    navigator.serial.addEventListener('disconnect', handleDisconnect);
-                    
-                    // Also set a timeout as fallback
-                    setTimeout(() => {
-                        navigator.serial.removeEventListener('disconnect', handleDisconnect);
-                        resolve();
-                    }, 60000); // 60 second timeout
-                });
-                
-                await waitForDisconnect;
-                log('✓ Device reset detected', 3);
-                
-                
+                        }, 10000);
+                    });
+                    log('✓ Continuing', 3);
+                }
+
+                // Not awaited - runs an open-ended read loop until stopSerialMonitor()
+                // cancels it. Silently does nothing if the port went stale across a real
+                // USB re-enumeration (see startSerialMonitor()'s comment).
+                startSerialMonitor();
+
                 // Collect actual configuration values for replacement
                 const configValues = {};
                 if (config.variables?.length) {
@@ -1252,9 +1470,16 @@
                     });
                 }
                 
-                // Show expected behavior with actual values substituted
+                // Show expected behavior with actual values substituted. expectedBehavior
+                // is optional - manifest.json-sourced firmwares (built from a
+                // flasher-manifest.yml that doesn't declare one) don't have it, only
+                // `description` - fall back to that rather than crashing on .map()
+                // of undefined.
                 const expectedList = document.getElementById('expectedBehaviorList');
-                expectedList.innerHTML = config.expectedBehavior
+                const expectedBehavior = config.expectedBehavior?.length
+                    ? config.expectedBehavior
+                    : [config.description || 'Device is now running the new firmware.'];
+                expectedList.innerHTML = expectedBehavior
                     .map(item => {
                         let processedItem = item;
                         
@@ -1397,15 +1622,54 @@
 
         // ==================== INITIALIZATION ====================
 
-        // Loads a manifest.json served alongside this page and merges its firmware
-        // entries into FIRMWARE_CONFIGS - see the matching function in index.html for
-        // the full explanation. A repo with no manifest.json behaves exactly as before.
+        // Populated from manifest.json's site.* fields (if any) - see
+        // applySiteCustomization() below. Read later when picking the step 3 reset
+        // video, since site.resetVideo is a fallback below a per-firmware override.
+        let siteConfig = {};
+
+        // Overrides this generic tool's own branding with a consuming repo's own -
+        // e.g. "Powered Up BLE Library Flasher" instead of "ESP32-S3 Flash Wizard" -
+        // from manifest.json's site.title/site.subtitle/site.bootModeVideo (
+        // flasher-manifest.yml's top-level `site:` key). Anything not provided keeps
+        // this repo's own default. bootModeVideo is site-wide only (not
+        // per-firmware): step 1 (where it's shown) runs before firmware selection in
+        // step 2, so there's no firmware-specific choice to apply yet.
+        const applySiteCustomization = (site) => {
+            if (!site) return;
+            siteConfig = site;
+            if (site.title) {
+                document.title = site.title;
+                const h1 = document.querySelector('.wizard-header h1');
+                if (h1) h1.textContent = site.title;
+            }
+            if (site.subtitle) {
+                const subtitleEl = document.getElementById('wizardSubtitle');
+                if (subtitleEl) {
+                    subtitleEl.textContent = site.subtitle;
+                    subtitleEl.style.display = 'block';
+                }
+            }
+            if (site.bootModeVideo) {
+                const source = document.querySelector('#step1BootVideo source');
+                if (source) {
+                    source.src = site.bootModeVideo;
+                    source.closest('video').load();
+                }
+            }
+        };
+
+        // Loads a manifest.json served alongside this page - shape is {site: {...},
+        // firmwares: {...}} - and merges its firmware entries into FIRMWARE_CONFIGS,
+        // plus applies any site-wide branding overrides. See the matching function in
+        // index.html for the full explanation. A repo with no manifest.json behaves
+        // exactly as before.
         const loadManifest = async () => {
             try {
                 const response = await fetch('./manifest.json');
                 if (!response.ok) return;
                 const manifest = await response.json();
-                Object.assign(FIRMWARE_CONFIGS, manifest);
+                applySiteCustomization(manifest.site);
+                Object.assign(FIRMWARE_CONFIGS, manifest.firmwares || {});
             } catch (e) {
                 // No manifest.json here, or it didn't parse - not an error.
             }

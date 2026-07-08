@@ -1,161 +1,173 @@
 {
-  "analog_throttle": {
-    "name": "analog_throttle.ino",
-    "description": "A breadboard potentiometer wired to the ESP32 acts as a physical throttle for a real LEGO train - turn to speed up/reverse, centre to stop.",
-    "files": [
-      {
-        "path": "firmware/analog_throttle/bootloader.bin",
-        "offset": 0
-      },
-      {
-        "path": "firmware/analog_throttle/partitions.bin",
-        "offset": 32768
-      },
-      {
-        "path": "firmware/analog_throttle/boot_app0.bin",
-        "offset": 57344
-      },
-      {
-        "path": "firmware/analog_throttle/firmware.bin",
-        "offset": 65536
-      }
-    ],
-    "hardware": "esp32-s3-devkitc-1"
+  "site": {
+    "title": "Powered Up BLE Library Flasher",
+    "subtitle": "Flash any esp32_PoweredUp example straight from your browser - no PlatformIO needed"
   },
-  "button_motor": {
-    "name": "button_motor.ino",
-    "description": "Drive a motor with the ESP32's own built-in button - a good starting point for building a physical remote for a LEGO creation.",
-    "files": [
-      {
-        "path": "firmware/button_motor/bootloader.bin",
-        "offset": 0
-      },
-      {
-        "path": "firmware/button_motor/partitions.bin",
-        "offset": 32768
-      },
-      {
-        "path": "firmware/button_motor/boot_app0.bin",
-        "offset": 57344
-      },
-      {
-        "path": "firmware/button_motor/firmware.bin",
-        "offset": 65536
-      }
-    ],
-    "hardware": "esp32-s3-devkitc-1"
-  },
-  "sensor_motor": {
-    "name": "sensor_motor.ino",
-    "description": "A motor and LED driven by a distance/detect sensor's reading - moving your hand closer or further changes both at once.",
-    "files": [
-      {
-        "path": "firmware/sensor_motor/bootloader.bin",
-        "offset": 0
-      },
-      {
-        "path": "firmware/sensor_motor/partitions.bin",
-        "offset": 32768
-      },
-      {
-        "path": "firmware/sensor_motor/boot_app0.bin",
-        "offset": 57344
-      },
-      {
-        "path": "firmware/sensor_motor/firmware.bin",
-        "offset": 65536
-      }
-    ],
-    "hardware": "esp32-s3-devkitc-1"
-  },
-  "train_hub": {
-    "name": "train_hub.ino",
-    "description": "Standalone Powered Up/train hub demo - drives the motor back and forth, LED colour indicates direction, prints tilt sensor readings if one's attached.",
-    "files": [
-      {
-        "path": "firmware/train_hub/bootloader.bin",
-        "offset": 0
-      },
-      {
-        "path": "firmware/train_hub/partitions.bin",
-        "offset": 32768
-      },
-      {
-        "path": "firmware/train_hub/boot_app0.bin",
-        "offset": 57344
-      },
-      {
-        "path": "firmware/train_hub/firmware.bin",
-        "offset": 65536
-      }
-    ],
-    "hardware": "esp32-s3-devkitc-1"
-  },
-  "train_remote": {
-    "name": "train_remote.ino",
-    "description": "A Powered Up Remote Control drives a train hub with key-repeat speed steps, a synced LED colour, and a NeoPixel speed gauge.",
-    "files": [
-      {
-        "path": "firmware/train_remote/bootloader.bin",
-        "offset": 0
-      },
-      {
-        "path": "firmware/train_remote/partitions.bin",
-        "offset": 32768
-      },
-      {
-        "path": "firmware/train_remote/boot_app0.bin",
-        "offset": 57344
-      },
-      {
-        "path": "firmware/train_remote/firmware.bin",
-        "offset": 65536
-      }
-    ],
-    "hardware": "esp32-s3-devkitc-1"
-  },
-  "wifi_control": {
-    "name": "wifi_control.ino",
-    "description": "No physical controls - drive the motor from a web page styled like the physical remote, served by the ESP32 itself over WiFi.",
-    "files": [
-      {
-        "path": "firmware/wifi_control/bootloader.bin",
-        "offset": 0
-      },
-      {
-        "path": "firmware/wifi_control/partitions.bin",
-        "offset": 32768
-      },
-      {
-        "path": "firmware/wifi_control/boot_app0.bin",
-        "offset": 57344
-      },
-      {
-        "path": "firmware/wifi_control/firmware.bin",
-        "offset": 65536
-      }
-    ],
-    "hardware": "esp32-s3-devkitc-1",
-    "variables": [
-      {
-        "firmware_name": "|*S*|",
-        "readable_name": "WiFi Name (SSID)",
-        "default_value": "",
-        "max_length": 100
-      },
-      {
-        "firmware_name": "|*P*|",
-        "readable_name": "WiFi Password",
-        "default_value": "",
-        "max_length": 100
-      },
-      {
-        "firmware_name": "esp-poweredup",
-        "readable_name": "mDNS Hostname",
-        "default_value": "esp-poweredup",
-        "postfix": ".local",
-        "max_length": 100
-      }
-    ]
+  "firmwares": {
+    "analog_throttle": {
+      "name": "analog_throttle.ino",
+      "description": "A breadboard potentiometer wired to the ESP32 acts as a physical throttle for a real LEGO train - turn to speed up/reverse, centre to stop.",
+      "files": [
+        {
+          "path": "firmware/analog_throttle/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/analog_throttle/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/analog_throttle/boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware/analog_throttle/firmware.bin",
+          "offset": 65536
+        }
+      ],
+      "hardware": "esp32-s3-devkitc-1",
+      "sourceUrl": "https://github.com/lemio/esp32_PoweredUp/tree/master/examples/analog_throttle"
+    },
+    "button_motor": {
+      "name": "button_motor.ino",
+      "description": "Drive a motor with the ESP32's own built-in button - a good starting point for building a physical remote for a LEGO creation.",
+      "files": [
+        {
+          "path": "firmware/button_motor/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/button_motor/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/button_motor/boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware/button_motor/firmware.bin",
+          "offset": 65536
+        }
+      ],
+      "hardware": "esp32-s3-devkitc-1",
+      "sourceUrl": "https://github.com/lemio/esp32_PoweredUp/tree/master/examples/button_motor"
+    },
+    "sensor_motor": {
+      "name": "sensor_motor.ino",
+      "description": "A motor and LED driven by a distance/detect sensor's reading - moving your hand closer or further changes both at once.",
+      "files": [
+        {
+          "path": "firmware/sensor_motor/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/sensor_motor/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/sensor_motor/boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware/sensor_motor/firmware.bin",
+          "offset": 65536
+        }
+      ],
+      "hardware": "esp32-s3-devkitc-1",
+      "sourceUrl": "https://github.com/lemio/esp32_PoweredUp/tree/master/examples/sensor_motor"
+    },
+    "train_hub": {
+      "name": "train_hub.ino",
+      "description": "Standalone Powered Up/train hub demo - drives the motor back and forth, LED colour indicates direction, prints tilt sensor readings if one's attached.",
+      "files": [
+        {
+          "path": "firmware/train_hub/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/train_hub/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/train_hub/boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware/train_hub/firmware.bin",
+          "offset": 65536
+        }
+      ],
+      "hardware": "esp32-s3-devkitc-1",
+      "sourceUrl": "https://github.com/lemio/esp32_PoweredUp/tree/master/examples/train_hub"
+    },
+    "train_remote": {
+      "name": "train_remote.ino",
+      "description": "A Powered Up Remote Control drives a train hub with key-repeat speed steps, a synced LED colour, and a NeoPixel speed gauge.",
+      "files": [
+        {
+          "path": "firmware/train_remote/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/train_remote/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/train_remote/boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware/train_remote/firmware.bin",
+          "offset": 65536
+        }
+      ],
+      "hardware": "esp32-s3-devkitc-1",
+      "sourceUrl": "https://github.com/lemio/esp32_PoweredUp/tree/master/examples/train_remote"
+    },
+    "wifi_control": {
+      "name": "wifi_control.ino",
+      "description": "No physical controls - drive the motor from a web page styled like the physical remote, served by the ESP32 itself over WiFi.",
+      "files": [
+        {
+          "path": "firmware/wifi_control/bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/wifi_control/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/wifi_control/boot_app0.bin",
+          "offset": 57344
+        },
+        {
+          "path": "firmware/wifi_control/firmware.bin",
+          "offset": 65536
+        }
+      ],
+      "hardware": "esp32-s3-devkitc-1",
+      "variables": [
+        {
+          "firmware_name": "|*S*|",
+          "readable_name": "WiFi Name (SSID)",
+          "default_value": "",
+          "max_length": 100
+        },
+        {
+          "firmware_name": "|*P*|",
+          "readable_name": "WiFi Password",
+          "default_value": "",
+          "max_length": 100
+        },
+        {
+          "firmware_name": "esp-poweredup",
+          "readable_name": "mDNS Hostname",
+          "default_value": "esp-poweredup",
+          "postfix": ".local",
+          "max_length": 100
+        }
+      ],
+      "sourceUrl": "https://github.com/lemio/esp32_PoweredUp/tree/master/examples/wifi_control"
+    }
   }
 }

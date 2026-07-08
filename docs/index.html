@@ -195,6 +195,52 @@
             color: #9ca3af;
         }
 
+        .serial-monitor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+
+        .serial-monitor-header .section-title {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Overrides the global `select, button { width: 100% }` above - these two
+           buttons live in flex rows and need to size to their own content instead. */
+        .serial-monitor-header .btn-secondary,
+        .serial-controls button {
+            width: auto;
+            flex-shrink: 0;
+            padding: 6px 14px;
+            font-size: 0.85em;
+        }
+
+        .serial-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .serial-controls input {
+            flex: 1;
+            min-width: 0;
+            padding: 10px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+
+        .serial-controls input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
         .status {
             padding: 12px 16px;
             border-radius: 8px;
@@ -268,6 +314,16 @@
         .firmware-info strong {
             color: #1a1a1a;
             font-weight: 600;
+        }
+
+        .hardware-tag {
+            display: inline-block;
+            font-size: 0.85em;
+            font-weight: 600;
+            color: #4b5563;
+            background: #f3f4f6;
+            border-radius: 4px;
+            padding: 1px 6px;
         }
 
         .variables-section {
@@ -419,24 +475,30 @@
         <div class="section">
             <div class="section-title">2. Connect Device</div>
             <button id="connectBtn">Connect to ESP32-S3</button>
-            <p class="info-text">
-                Make sure your device is connected via USB and in download mode
-            </p>
         </div>
 
         <div class="section">
             <div class="section-title">3. Flash or Download Firmware</div>
             <div class="button-group">
-                <button id="downloadBtn" class="btn-secondary" disabled>Download Modified Firmware</button>
+                <button id="downloadBtn" class="btn-secondary" disabled>Download Firmware</button>
                 <button id="flashBtn" disabled>Flash Device</button>
             </div>
-            <p class="info-text">
-                Tip: Download first to verify your configuration before flashing
-            </p>
             <div class="progress-container" id="progressContainer">
                 <div class="progress-bar" id="progressBar"></div>
             </div>
             <div class="progress-text" id="progressText">0%</div>
+        </div>
+
+        <div class="section" id="serialMonitorSection" style="display: none;">
+            <div class="serial-monitor-header">
+                <div class="section-title" style="margin: 0;">4. Serial Monitor</div>
+                <button id="serialToggleBtn" class="btn-secondary">Stop Monitor</button>
+            </div>
+            <div class="console" id="serialMonitor"></div>
+            <div class="serial-controls">
+                <input type="text" id="serialInput" placeholder="Type a message to send">
+                <button id="serialSendBtn" class="btn-secondary">Send</button>
+            </div>
         </div>
 
         <div class="section">
@@ -455,6 +517,7 @@
         let device = null;
         let transport = null;
         let connected = false;
+        let serialMonitorActive = false;
 
         // ==================== DOM ELEMENTS ====================
         
@@ -467,7 +530,12 @@
             progressContainer: document.getElementById('progressContainer'),
             progressBar: document.getElementById('progressBar'),
             firmwareSelect: document.getElementById('firmwareSelect'),
-            variablesContainer: document.getElementById('variablesContainer')
+            variablesContainer: document.getElementById('variablesContainer'),
+            serialMonitorSection: document.getElementById('serialMonitorSection'),
+            serialMonitor: document.getElementById('serialMonitor'),
+            serialInput: document.getElementById('serialInput'),
+            serialToggleBtn: document.getElementById('serialToggleBtn'),
+            serialSendBtn: document.getElementById('serialSendBtn')
         };
 
         // ==================== UTILITY FUNCTIONS ====================
@@ -698,14 +766,14 @@
         };
 
         const updateFirmwareInfo = (config) => {
-            const files = config.files.map(f => f.path.split('/').pop()).join(', ');
             document.querySelector('.firmware-info').innerHTML = `
-                <strong>Selected:</strong> ${config.name}<br>
-                <strong>Files:</strong> ${files}<br>
-                <strong>Chip:</strong> ${CONFIG.CHIP_NAME}${config.hardware ? `<br><strong>Board:</strong> ${config.hardware}` : ''}
+                <strong>${config.name}</strong>${config.hardware ? ` <span class="hardware-tag">${config.hardware}</span>` : ''}<br>
+                ${config.description || ''}
+                ${config.sourceUrl ? `<br><a href="${config.sourceUrl}" target="_blank" rel="noopener noreferrer">View source ↗</a>` : ''}
             `;
             renderVariables(config);
-            elements.downloadBtn.disabled = !config.variables?.length;
+            elements.downloadBtn.disabled = false;
+            elements.downloadBtn.textContent = config.variables?.length ? 'Download Modified Firmware' : 'Download Firmware';
         };
 
         // ==================== FIRMWARE OPERATIONS ====================
@@ -717,33 +785,126 @@
             return binaryUtils.arrayBufferToString(buffer);
         };
 
-        const prepareFirmware = async () => {
-            const config = FIRMWARE_CONFIGS[elements.firmwareSelect.value];
-            const firmwareFile = config.files.find(f => f.path.endsWith('firmware.bin'));
-            
-            if (!firmwareFile) throw new Error('firmware.bin not found');
-            
-            log(`Loading ${firmwareFile.path}...`, 'info');
-            let firmware = await loadFirmware(firmwareFile.path);
-            
-            if (config.variables?.length) {
-                log('Processing variables...', 'info');
-                firmware = await replaceVariables(firmware, config.variables);
+        // ==================== SERIAL MONITOR ====================
+
+        // Keeps both DOM node count and memory bounded - without this, a device stuck
+        // in a boot loop spamming the same message can grow the console without limit
+        // and freeze the tab.
+        const MAX_SERIAL_CHARS = 200000;
+        let serialCharCount = 0;
+
+        // appendChild(textNode) instead of `el.textContent += text`: the latter
+        // destroys and recreates the *entire* text content on every single chunk,
+        // which silently clears any text the user has selected (confirmed - this is
+        // exactly why selecting output was impossible while data kept arriving).
+        // Appending a new node leaves existing nodes - and any selection anchored in
+        // them - alone.
+        const appendSerialText = (el, text) => {
+            el.appendChild(document.createTextNode(text));
+            serialCharCount += text.length;
+            while (serialCharCount > MAX_SERIAL_CHARS && el.firstChild) {
+                serialCharCount -= el.firstChild.textContent.length;
+                el.removeChild(el.firstChild);
             }
-            
-            return firmware;
+            // Only auto-scroll if already near the bottom - otherwise this fights
+            // anyone trying to read or select output further up.
+            if (el.scrollHeight - el.scrollTop - el.clientHeight < 40) {
+                el.scrollTop = el.scrollHeight;
+            }
         };
 
+        // Reads raw (non-SLIP-framed) bytes straight from the same port used for
+        // flashing - transport.rawRead() bypasses esptool-js's SLIP packet parsing,
+        // which is only meant for talking to the ROM bootloader/stub. This assumes the
+        // firmware's Serial.begin() matches CONFIG.BAUD_RATE (115200, the standard
+        // Arduino default) - the port was already opened at that rate for flashing and
+        // is never changed since romBaudrate === baudrate in this tool's config, so no
+        // reconnect is needed here.
+        const startSerialMonitor = async () => {
+            if (!transport || serialMonitorActive) return;
+            serialMonitorActive = true;
+            elements.serialMonitorSection.style.display = 'block';
+            elements.serialMonitor.textContent = '';
+            serialCharCount = 0;
+            elements.serialToggleBtn.textContent = 'Stop Monitor';
+
+            if (!transport.reader) {
+                transport.reader = transport.device.readable?.getReader();
+            }
+
+            const decoder = new TextDecoder();
+            try {
+                for await (const chunk of transport.rawRead()) {
+                    appendSerialText(elements.serialMonitor, decoder.decode(chunk, { stream: true }));
+                }
+            } catch (e) {
+                // Expected once stopSerialMonitor() cancels the reader, or the device disconnects.
+            } finally {
+                serialMonitorActive = false;
+                elements.serialToggleBtn.textContent = 'Start Monitor';
+            }
+        };
+
+        const stopSerialMonitor = async () => {
+            if (!serialMonitorActive) return;
+            try {
+                await transport?.reader?.cancel();
+                // Same pattern esptool-js's own disconnect() uses: cancel() settling
+                // doesn't strictly guarantee the reader lock is released yet, so poll
+                // briefly before handing the port back to a fresh flash/monitor attempt.
+                await transport?.waitForUnlock(50);
+            } catch (e) {
+                // Already closed/disconnected - nothing to clean up.
+            }
+            // Cancelling doesn't clear this - a cancelled reader can't be read from
+            // again, so leaving it set would break the next flash's own read attempts.
+            // esptool-js's own disconnect() does the same reset after cancelling.
+            if (transport) transport.reader = undefined;
+        };
+
+        // Single toggle button instead of a lone "Stop" button with no way back -
+        // clicking it again while stopped restarts the monitor (reopens a reader on
+        // the same still-open port, same as the automatic first start).
+        elements.serialToggleBtn.addEventListener('click', () => {
+            if (serialMonitorActive) {
+                stopSerialMonitor();
+            } else {
+                startSerialMonitor(); // not awaited - open-ended loop, see its own comment
+            }
+        });
+
+        const sendSerialLine = async () => {
+            const text = elements.serialInput.value;
+            if (!text || !transport?.device?.writable) return;
+            const writer = transport.device.writable.getWriter();
+            try {
+                await writer.write(new TextEncoder().encode(text + '\n'));
+            } finally {
+                writer.releaseLock();
+            }
+            elements.serialInput.value = '';
+        };
+
+        elements.serialSendBtn.addEventListener('click', () => sendSerialLine());
+        elements.serialInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendSerialLine();
+        });
+
         // ==================== CONNECTION MANAGEMENT ====================
-        
+
         const disconnect = async () => {
+            await stopSerialMonitor();
+            elements.serialMonitorSection.style.display = 'none';
+
             // Remove disconnect listener to prevent duplicate handling
             if (device) {
                 navigator.serial.removeEventListener('disconnect', handleDisconnect);
             }
-            
-            if (esploader) {
-                await esploader.disconnect();
+
+            // ESPLoader itself has no disconnect() method in esptool-js (only
+            // Transport does) - calling esploader.disconnect() throws "not a function".
+            if (transport) {
+                await transport.disconnect();
                 await sleep(CONFIG.DISCONNECT_WAIT_MS);
             }
             connected = false;
@@ -755,13 +916,50 @@
             device = null;
         };
 
-        const connect = async () => {
-            log('Requesting device access...', 'info');
-            device = await navigator.serial.requestPort({ filters: CONFIG.FILTERS });
-            
-            console.log(device.getInfo());
-            transport = new Transport(device, true);
-            
+        // esptool-js's own UsbJtagSerialReset sequence (native-USB boards, PID 0x1001) -
+        // done explicitly on an already-open transport before re-syncing for a second
+        // flash. esploader.main()/connect() always call transport.connect() as their
+        // very first action (unconditionally reopening the port), so there's no way to
+        // pulse RTS/DTR *before* calling them without the port already being open - it
+        // has to happen on the *existing* connection, before closing it. Mirrors the
+        // same reasoning as the explicit exit-reset pulse used after flashing
+        // (esploader.after('hard_reset', ...) wasn't reliable there either, and there's
+        // no strong reason to trust its built-in entry-side reset any more on this
+        // same connection type).
+        const resetIntoBootloader = async (t) => {
+            await t.setRTS(false);
+            await t.setDTR(false);
+            await sleep(100);
+            await t.setDTR(true);
+            await t.setRTS(false);
+            await sleep(100);
+            await t.setRTS(true);
+            await t.setDTR(false);
+            await t.setRTS(true);
+            await sleep(100);
+            await t.setRTS(false);
+            await t.setDTR(false);
+            // Longer settle delay than the steps above - this is giving the chip's
+            // USB-CDC bootloader stack time to actually finish initializing before the
+            // port gets closed and reopened right after this returns, not just letting
+            // an RTS/DTR transition propagate. Read timeout spam during the sync
+            // attempts that follow (seen in practice, esptool-js's own internal retry
+            // loop working through several failures before one lands) is consistent
+            // with this being too short.
+            await sleep(500);
+        };
+
+        // Builds a completely fresh Transport + ESPLoader against the given device (no
+        // new permission prompt - the same SerialPort object can be reopened as many
+        // times as needed within one grant) and syncs with it. Used both for the
+        // initial connect and to re-sync before each subsequent flash - reusing the
+        // *same* ESPLoader instance across multiple main() calls left stale internal
+        // state (e.g. this.IS_STUB) that caused a real, confirmed failure: "Software
+        // loader is resident..." on a second flash, because the instance still thought
+        // a stub was already running from the first flash's sync. Fresh objects avoid
+        // that whole class of problem, not just the port-already-open issue.
+        const syncWithDevice = async (targetDevice, mode = 'default_reset') => {
+            transport = new Transport(targetDevice, true);
             esploader = new ESPLoader({
                 transport: transport,
                 baudrate: CONFIG.BAUD_RATE,
@@ -771,13 +969,26 @@
                     write: (data) => log(data)
                 }
             });
-            
-            await esploader.main();
-            const chipName = await esploader.chip.CHIP_NAME;
-            
-            log(`Connected to ${chipName}`, 'success');
-            showStatus(`Connected to ${chipName} - Ready!`, 'success');
-            
+            await esploader.main(mode);
+        };
+
+        const connect = async () => {
+            log('Requesting device access...', 'info');
+            device = await navigator.serial.requestPort({ filters: CONFIG.FILTERS });
+            console.log(device.getInfo());
+
+            // Deliberately just opens the port - no sync, no reset-into-bootloader.
+            // esptool-js's main()/connect() always pulse the device into download mode
+            // as part of syncing, which used to happen right here on every Connect
+            // click even if the device was mid-way through running its own firmware.
+            // Only Flash Device (below) actually needs bootloader mode, so that's the
+            // only place that's still true.
+            transport = new Transport(device, true);
+            await transport.connect(CONFIG.BAUD_RATE, {});
+
+            log('Device connected - click Flash Device to begin', 'success');
+            showStatus('Device connected - click Flash Device when ready', 'success');
+
             connected = true;
             elements.connectBtn.textContent = 'Disconnect';
             elements.connectBtn.classList.add('connected');
@@ -798,7 +1009,9 @@
                 elements.connectBtn.classList.remove('connected');
                 elements.flashBtn.disabled = true;
                 elements.progressContainer.style.display = 'none';
-                
+                elements.serialMonitorSection.style.display = 'none';
+                serialMonitorActive = false; // the port is already gone - rawRead()'s loop will throw and exit on its own
+
                 // Clean up
                 esploader = null;
                 transport = null;
@@ -848,24 +1061,51 @@
             }
         });
 
+        const downloadBlob = (bytes, filename, type = 'application/octet-stream') => {
+            const blob = new Blob([bytes], { type });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            URL.revokeObjectURL(url);
+        };
+
+        // Downloads every file this firmware needs (not just firmware.bin) - each
+        // named with the firmware key as a prefix so files from different firmwares
+        // don't collide in the same Downloads folder - plus a small companion
+        // <key>-flash-config.js describing what goes at which offset, for flashing
+        // manually later (e.g. with esptool.py) without needing this page again.
         elements.downloadBtn.addEventListener('click', async () => {
+            const key = elements.firmwareSelect.value;
+            const config = FIRMWARE_CONFIGS[key];
             try {
                 elements.downloadBtn.disabled = true;
-                log('Preparing firmware download...', 'info');
+                log(`Preparing ${config.files.length} file(s) for download...`, 'info');
                 showStatus('Preparing firmware...', 'info');
 
-                const firmware = await prepareFirmware();
-                const bytes = binaryUtils.stringToArrayBuffer(firmware);
-                const blob = new Blob([bytes], { type: 'application/octet-stream' });
-                
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = 'firmware_modified.bin';
-                link.click();
-                URL.revokeObjectURL(url);
+                const downloaded = [];
+                for (const file of config.files) {
+                    log(`Loading ${file.path}...`, 'info');
+                    let binaryString = await loadFirmware(file.path);
+                    if (file.path.endsWith('firmware.bin') && config.variables?.length) {
+                        binaryString = await replaceVariables(binaryString, config.variables);
+                    }
+                    const filename = `${key}-${file.path.split('/').pop()}`;
+                    downloadBlob(binaryUtils.stringToArrayBuffer(binaryString), filename);
+                    downloaded.push({ path: filename, offset: file.offset });
+                    await sleep(150); // stagger multi-file downloads so the browser doesn't drop any
+                }
 
-                log(`Firmware downloaded (${bytes.length} bytes)`, 'success');
+                const flashConfig = { name: config.name, chip: CONFIG.CHIP_NAME, files: downloaded };
+                const esptoolArgs = downloaded.map(f => `0x${f.offset.toString(16)} ${f.path}`).join(' ');
+                const configJs = `// Flash configuration for ${config.name}\n` +
+                    `// Write each file to its offset, e.g.:\n` +
+                    `// esptool.py --chip esp32s3 write_flash ${esptoolArgs}\n` +
+                    `const FLASH_CONFIG = ${JSON.stringify(flashConfig, null, 4)};\n`;
+                downloadBlob(configJs, `${key}-flash-config.js`, 'text/javascript');
+
+                log(`Downloaded ${downloaded.length} file(s) plus flash-config.js`, 'success');
                 showStatus('Download complete!', 'success');
             } catch (error) {
                 log(`Download failed: ${error.message}`, 'error');
@@ -881,6 +1121,9 @@
                 return;
             }
 
+            // A running serial monitor holds the same reader flashing needs - stop it first.
+            await stopSerialMonitor();
+
             try {
                 elements.flashBtn.disabled = true;
                 elements.connectBtn.disabled = true;
@@ -891,6 +1134,40 @@
                 const config = FIRMWARE_CONFIGS[elements.firmwareSelect.value];
                 log(`Flashing: ${config.name}`, 'info');
                 showStatus('Flashing firmware...', 'info');
+
+                // Enter bootloader mode and sync - connect() deliberately doesn't do
+                // this (see its own comment), so this is the only place it happens,
+                // uniformly for the first flash and every one after. Order matters:
+                // the reset pulse needs the port already open, so it runs on the
+                // *current* transport first, then the port is closed, then a fresh
+                // Transport/ESPLoader syncs against it with mode='no_reset' (skip
+                // main()'s own reset attempt - we just did one). Fresh objects avoid
+                // stale internal state (e.g. this.IS_STUB) that caused a different,
+                // confirmed failure - "Software loader is resident..." - from reusing
+                // the same ESPLoader instance across more than one flash.
+                //
+                // Retries the whole reset+sync a few times with a *fresh* pulse each
+                // time, rather than relying only on esptool-js's own internal retry
+                // loop (which reuses the same post-pulse state without ever pulsing
+                // again) - seen in practice to spend a long time cycling through
+                // "Read timeout exceeded" before either landing or giving up outright.
+                let lastSyncError;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        log(`Entering bootloader mode... (attempt ${attempt}/3)`, 'info');
+                        await resetIntoBootloader(transport);
+                        await transport.disconnect();
+                        await sleep(200); // let the OS/browser fully release the port before reopening it
+                        await syncWithDevice(device, 'no_reset');
+                        lastSyncError = null;
+                        break;
+                    } catch (e) {
+                        lastSyncError = e;
+                        log(`Sync attempt ${attempt} failed: ${e.message}`, 'warning');
+                    }
+                }
+                if (lastSyncError) throw lastSyncError;
+                log(`Connected to ${esploader.chip.CHIP_NAME}`, 'success');
 
                 const fileArray = [];
                 let firmwareBin = null;
@@ -948,37 +1225,47 @@
                 updateProgress(90);
                 log('Flash complete! Resetting device...', 'success');
                 
-                // ESP32-S3 needs special handling to exit boot mode and run the app.
-                // usingUsbOtg must be true for boards connected via their native
-                // USB-JTAG/Serial peripheral (PID 0x1001, e.g. the ESP32-S3's built-in
-                // USB port) - esptool-js's hard_reset otherwise only pulses RTS with a
-                // shorter delay, which isn't enough to actually reset this connection
-                // type (this is also why PlatformIO's own upload can hard-reset
-                // reliably but this tool previously couldn't: it never passed this flag).
+                // esptool-js's esploader.after('hard_reset', ...) only ever *releases*
+                // RTS - it assumes RTS is already asserted from an earlier step and is
+                // a no-op if that assumption doesn't hold, which is exactly what we saw
+                // in practice: it logs success but the device stays in bootloader mode
+                // until a manual power cycle. Pulse RTS explicitly ourselves instead -
+                // assert (reset), wait, release - the same sequence confirmed working by
+                // other web flashers (e.g. https://github.com/thelastoutpostworkshop/ESPConnect).
+                // Transport.setRTS() already re-sends DTR internally on every call (a
+                // Windows usbser.sys driver workaround ported from esptool.py), so no
+                // extra DTR handling is needed here.
                 try {
                     log('Exiting download mode...', 'info');
-                    const usingUsbOtg = transport.getPid() === esploader.USB_JTAG_SERIAL_PID;
-                    await esploader.after('hard_reset', usingUsbOtg);
+                    await transport.setRTS(true);
+                    await sleep(100);
+                    await transport.setRTS(false);
+                    await sleep(1000); // let the chip actually finish booting
                     log('Device should now boot into application', 'success');
                     } catch (e) {
                     log('Could not automatically reset - please press RESET button on device', 'warning');
                 }
                 
                 await sleep(CONFIG.DISCONNECT_WAIT_MS);
-                
+
                 updateProgress(100);
                 log('Flash operation complete!', 'success');
                 showStatus('Flash successful! Device is now booting.', 'success');
+
+                // Not awaited - this runs an open-ended read loop until stopSerialMonitor()
+                // cancels it, so awaiting here would block forever instead of finishing this function.
+                startSerialMonitor();
 
             } catch (error) {
                 const errorMsg = error.message.toLowerCase();
                 
                 // Check for boot mode error during flashing (timeout is most common indicator)
                 if (errorMsg.includes("timeout") ||
-                    errorMsg.includes("doesn't look like an image file") || 
+                    errorMsg.includes("doesn't look like an image file") ||
                     errorMsg.includes("invalid head of packet") ||
                     errorMsg.includes("failed to write") ||
-                    errorMsg.includes("packet content transfer stopped")) {
+                    errorMsg.includes("packet content transfer stopped") ||
+                    errorMsg.includes("no serial data received")) {
                     
                     log('Flash failed: Device must be in boot mode BEFORE flashing!', 'error');
                     showStatus('Flash failed - Enter boot mode first!', 'error');
@@ -1014,20 +1301,42 @@
 
         // ==================== INITIALIZATION ====================
 
+        // Overrides this generic tool's own branding with a consuming repo's own -
+        // e.g. "Powered Up BLE Library Flasher" instead of "ESP32-S3 Web Flasher" -
+        // from manifest.json's site.title/site.subtitle (flasher-manifest.yml's
+        // top-level `site:` key). Anything not provided keeps this repo's own default.
+        const applySiteCustomization = (site) => {
+            if (!site) return;
+            if (site.title) {
+                document.title = site.title;
+                const h1 = document.querySelector('h1');
+                if (h1) h1.textContent = site.title;
+            }
+            if (site.subtitle) {
+                const subtitleEl = document.querySelector('.subtitle');
+                if (subtitleEl) subtitleEl.textContent = site.subtitle;
+            }
+        };
+
         // Loads a manifest.json served alongside this page (e.g. a PlatformIO repo's own
-        // GitHub Pages build output) and merges its firmware entries into FIRMWARE_CONFIGS,
-        // same shape as an entry hand-written in config.js. Lets any repo add firmwares to
-        // this same flasher UI without editing config.js - see the reusable build Action
-        // in this repo's action/ directory, which generates this file. A repo with no
-        // manifest.json (like this one, today) behaves exactly as before: fetch 404s, and
-        // config.js's hardcoded FIRMWARE_CONFIGS entries are all that's shown.
+        // GitHub Pages build output) - shape is {site: {...}, firmwares: {...}} - and
+        // merges its firmware entries into FIRMWARE_CONFIGS (same shape as an entry
+        // hand-written in config.js) plus applies any site-wide branding overrides. Lets
+        // any repo add firmwares to this same flasher UI, and rename it to match their
+        // own project, without editing config.js or this page directly - see the
+        // reusable build Action in this repo's action/ directory, which generates this
+        // file. A repo with no manifest.json (like this one, today) behaves exactly as
+        // before: fetch 404s, and config.js's hardcoded FIRMWARE_CONFIGS entries (if any)
+        // are all that's shown, with this tool's own default branding.
         const loadManifest = async () => {
             try {
                 const response = await fetch('./manifest.json');
                 if (!response.ok) return;
                 const manifest = await response.json();
-                Object.assign(FIRMWARE_CONFIGS, manifest);
-                log(`Loaded ${Object.keys(manifest).length} firmware(s) from manifest.json`, 'info');
+                applySiteCustomization(manifest.site);
+                const firmwares = manifest.firmwares || {};
+                Object.assign(FIRMWARE_CONFIGS, firmwares);
+                log(`Loaded ${Object.keys(firmwares).length} firmware(s) from manifest.json`, 'info');
             } catch (e) {
                 // No manifest.json here, or it didn't parse - not an error, just nothing to add.
             }
