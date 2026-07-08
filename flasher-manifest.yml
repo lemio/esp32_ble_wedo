@@ -27,30 +27,35 @@ examples:
     description: >-
       Drive a motor with the ESP32's own built-in button - a good starting point for
       building a physical remote for a LEGO creation.
+    sourceUrl: https://github.com/lemio/esp32_PoweredUp/tree/master/examples/button_motor
 
   sensor_motor:
     name: sensor_motor.ino
     description: >-
       A motor and LED driven by a distance/detect sensor's reading - moving your hand
       closer or further changes both at once.
+    sourceUrl: https://github.com/lemio/esp32_PoweredUp/tree/master/examples/sensor_motor
 
   train_hub:
     name: train_hub.ino
     description: >-
       Standalone Powered Up/train hub demo - drives the motor back and forth, LED
       colour indicates direction, prints tilt sensor readings if one's attached.
+    sourceUrl: https://github.com/lemio/esp32_PoweredUp/tree/master/examples/train_hub
 
   train_remote:
     name: train_remote.ino
     description: >-
       A Powered Up Remote Control drives a train hub with key-repeat speed steps, a
       synced LED colour, and a NeoPixel speed gauge.
+    sourceUrl: https://github.com/lemio/esp32_PoweredUp/tree/master/examples/train_remote
 
   wifi_control:
     name: wifi_control.ino
     description: >-
       No physical controls - drive the motor from a web page styled like the physical
       remote, served by the ESP32 itself over WiFi.
+    sourceUrl: https://github.com/lemio/esp32_PoweredUp/tree/master/examples/wifi_control
     variables:
       - firmware_name: "|*S*|"
         readable_name: WiFi Name (SSID)
@@ -71,3 +76,4 @@ examples:
     description: >-
       A breadboard potentiometer wired to the ESP32 acts as a physical throttle for a
       real LEGO train - turn to speed up/reverse, centre to stop.
+    sourceUrl: https://github.com/lemio/esp32_PoweredUp/tree/master/examples/analog_throttle
