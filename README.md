@@ -1,3 +1,5 @@
+You can flash the examples below directly to an esp32-s3-devkit-c1 or a compatible esp32-s3 board using the [Web flasher](https://lemio.github.io/esp32_PoweredUp/)
+
 # Powered Up BLE library for ESP32
 A library to control LEGO Powered Up, BOOST, train, Duplo, and WeDo 2.0 hubs (plus the
 Powered Up Remote Control) from an ESP32 over Bluetooth low energy.
