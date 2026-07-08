@@ -446,7 +446,9 @@ void bleConnect(BLESlot slot, uint32_t timeoutMs) {
     }
 
     if (!bleSlots[slot].connected) {
-        Serial.printf("Warning: Initial connection attempt timed out. Scan continues in background.\n");
+        Serial.printf("Warning: Initial connection attempt timed out. Scan continues in "
+                       "background - keep calling connected() (e.g. in your wait loop) or "
+                       "handleConnection() to finish connecting once the device is found.\n");
     }
 }
 
@@ -576,6 +578,31 @@ bool bleConnected(BLESlot slot) {
     if (slot == BLE_SLOT_INVALID) {
         return false;
     }
+
+    // A caller polling connected() in a loop is the ONLY thing running after
+    // bleConnect()'s own blocking window (above) gives up - "Scan continues in
+    // background" was a real promise, but nothing ever actually kept it. Once
+    // bleConnect() returns, a doConnect flag set later by the scan's still-running
+    // background discovery was never consumed unless something called
+    // bleHandleConnections() - normally only reached via handleConnection(), from the
+    // caller's *main loop* - which the documented `while (!hub.connected()) {
+    // delay(100); }` pattern (used in every example) can't reach, since it's still
+    // inside setup(), before loop() ever runs. Piggyback the same completion logic
+    // here so simply polling connected() is actually enough to make progress, instead
+    // of spinning forever once the initial window has passed.
+    BLEConnectionSlot& s = bleSlots[slot];
+    if (s.inUse && !s.connected && s.doConnect) {
+        s.doConnect = false;
+        if (connectToWedoServer(slot)) {
+            Serial.printf("Successfully connected to LEGO device (background)\n");
+        } else {
+            Serial.printf("Background connection attempt failed, continuing scan\n");
+            if (!NimBLEDevice::getScan()->isScanning()) {
+                NimBLEDevice::getScan()->start(scanTimeMs, false, true);
+            }
+        }
+    }
+
     return bleSlots[slot].connected;
 }
 
